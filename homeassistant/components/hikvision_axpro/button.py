@@ -68,11 +68,6 @@ class NanoleafIdentifyButton(CoordinatorEntity, ButtonEntity):
         return "boton tttttt"
         # "HikvisionAxPro"
 
-    def press(self) -> None:
-        """Handle the button press."""
-        _LOGGER.debug("Pre 2 Boton apretado")
-
     async def async_press(self) -> None:
         """Identify the Nanoleaf."""
-        _LOGGER.debug("Pre Boton apretado")
         await self.coordinator.test_button()

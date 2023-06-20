@@ -4,7 +4,7 @@ from typing import Any
 
 import voluptuous as vol
 
-from .hikax import hikax
+from .hikax import HikAx
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
@@ -21,7 +21,7 @@ from homeassistant.const import (
 )
 from homeassistant.components.alarm_control_panel import SCAN_INTERVAL
 
-from .const import DOMAIN, USE_CODE_ARMING, ALLOW_SUBSYSTEMS, INTERNAL_API, ENABLE_DEBUG_OUTPUT
+from .const import DOMAIN, USE_CODE_ARMING, ALLOW_SUBSYSTEMS, ENABLE_DEBUG_OUTPUT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,7 +36,6 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Optional(USE_CODE_ARMING, default=False): bool,
         vol.Required(CONF_SCAN_INTERVAL, default=SCAN_INTERVAL.total_seconds()): int,
         vol.Optional(ALLOW_SUBSYSTEMS, default=False): bool,
-        vol.Optional(INTERNAL_API, default=False): bool,
         vol.Optional(ENABLE_DEBUG_OUTPUT, default=False): bool,
     }
 )
@@ -53,7 +52,6 @@ CONFIGURE_SCHEMA = vol.Schema(
         vol.Optional(USE_CODE_ARMING, default=False): bool,
         vol.Required(CONF_SCAN_INTERVAL, default=SCAN_INTERVAL.total_seconds()): int,
         vol.Optional(ALLOW_SUBSYSTEMS, default=False): bool,
-        vol.Optional(INTERNAL_API, default=False): bool,
         vol.Optional(ENABLE_DEBUG_OUTPUT, default=False): bool,
     }
 )
@@ -88,7 +86,7 @@ class AxHub:
         self.host = host
         self.username = username
         self.password = password
-        self.axpro = hikax.HikAx(host, username, password)
+        self.axpro = HikAx(host, username, password)
         self.hass = hass
 
     async def authenticate(self) -> bool:
