@@ -5,7 +5,7 @@ from datetime import timedelta
 from typing import Optional
 from collections.abc import Callable
 
-from .hikax import hikax
+from .hikax import HikAx
 
 from async_timeout import timeout
 
@@ -30,7 +30,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DATA_COORDINATOR, DOMAIN, USE_CODE_ARMING, INTERNAL_API, ENABLE_DEBUG_OUTPUT
+from .const import DATA_COORDINATOR, DOMAIN, USE_CODE_ARMING, ENABLE_DEBUG_OUTPUT
 from .model import ZonesResponse, Zone, SubSystemResponse, SubSys, Arming, ZonesConf, ZoneConfig
 
 PLATFORMS: list[Platform] = [
@@ -72,12 +72,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     code_format = entry.data[ATTR_CODE_FORMAT]
     code = entry.data[CONF_CODE]
     use_code_arming = entry.data[USE_CODE_ARMING]
-    axpro = hikax.HikAx(host, username, password)
+    axpro = HikAx(host, username, password)
     update_interval: float = entry.data.get(
         CONF_SCAN_INTERVAL, SCAN_INTERVAL.total_seconds())
 
-    if entry.data.get(ENABLE_DEBUG_OUTPUT):
-        axpro.set_logging_level(logging.DEBUG)
+    _LOGGER.setLevel(logging.DEBUG)
 
     coordinator = HikAxProDataUpdateCoordinator(
         hass,
@@ -118,7 +117,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry):
 
 class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching ax pro data."""
-    axpro: hikax.HikAx
+    axpro: HikAx
     zone_status: Optional[ZonesResponse]
     zones: Optional[dict[int, Zone]] = None
     device_model: Optional[str] = None
@@ -133,7 +132,7 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
     def __init__(
         self,
         hass,
-        axpro: hikax.HikAx,
+        axpro: HikAx,
         use_code,
         code_format,
         use_code_arming,
@@ -181,13 +180,16 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             subsys_resp = SubSystemResponse.from_dict(status_json)
             subsys_arr: list[SubSys] = []
+
             if subsys_resp is not None and subsys_resp.sub_sys_list is not None:
                 subsys_arr = []
                 for sublist in subsys_resp.sub_sys_list:
                     subsys_arr.append(sublist.sub_sys)
+
             func: Callable[[SubSys], bool] = lambda n: n.enabled
             subsys_arr = list(filter(func, subsys_arr))
             self.sub_systems = {}
+
             for subsys in subsys_arr:
                 self.sub_systems[subsys.id] = subsys
                 if subsys.alarm:
