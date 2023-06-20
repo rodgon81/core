@@ -32,13 +32,16 @@ async def async_setup_entry(
         manufacturer="HikVision" if coordinator.device_model is not None else "Unknown",
         # suggested_area=zone.zone.,
         name=coordinator.device_name,
-        #via_device=(DOMAIN, str(coordinator.mac)),
+        # via_device=(DOMAIN, str(coordinator.mac)),
         model=coordinator.device_model,
     )
+
     panels = [HikAxProPanel(coordinator)]
+
     if bool(entry.data.get(ALLOW_SUBSYSTEMS, False)):
         for sub_system in coordinator.sub_systems.values():
             panels.append(HikAxProSubPanel(coordinator, sub_system))
+
     async_add_entities(panels, False)
 
 
@@ -136,7 +139,6 @@ class HikAxProSubPanel(CoordinatorEntity, AlarmControlPanelEntity):
         self.sys = sys
         super().__init__(coordinator=coordinator)
 
-
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
@@ -149,8 +151,6 @@ class HikAxProSubPanel(CoordinatorEntity, AlarmControlPanelEntity):
         AlarmControlPanelEntityFeature.ARM_HOME
         | AlarmControlPanelEntityFeature.ARM_AWAY
     )
-
-
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -232,4 +232,3 @@ class HikAxProSubPanel(CoordinatorEntity, AlarmControlPanelEntity):
 
     def __is_code_valid(self, code):
         return code == self.coordinator.code
-

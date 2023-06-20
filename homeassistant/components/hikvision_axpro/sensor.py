@@ -36,17 +36,20 @@ async def async_setup_entry(
     devices = []
     await coordinator.async_request_refresh()
     device_registry = dr.async_get(hass)
+
     if coordinator.zone_status is not None:
         for zone in coordinator.zone_status.zone_list:
             zone_config = coordinator.devices.get(zone.zone.id)
             detector_type: DetectorType | None
+
             if zone_config is not None:
                 _LOGGER.debug("Adding device with zone config: %s", zone)
                 _LOGGER.debug("+ config: %s", zone_config)
                 device_registry.async_get_or_create(
                     config_entry_id=entry.entry_id,
                     # connections={},
-                    identifiers={(DOMAIN, str(entry.entry_id) + "-" + str(zone_config.id))},
+                    identifiers={(DOMAIN, str(entry.entry_id) + \
+                                  "-" + str(zone_config.id))},
                     manufacturer="HikVision" if zone.zone.model is not None else "Unknown",
                     # suggested_area=zone.zone.,
                     name=zone_config.zone_name,
@@ -60,7 +63,8 @@ async def async_setup_entry(
                 device_registry.async_get_or_create(
                     config_entry_id=entry.entry_id,
                     # connections={},
-                    identifiers={(DOMAIN, str(entry.entry_id) + "-" + str(zone.zone.id))},
+                    identifiers={(DOMAIN, str(entry.entry_id) + \
+                                  "-" + str(zone.zone.id))},
                     manufacturer="HikVision" if zone.zone.model is not None else "Unknown",
                     # suggested_area=zone.zone.,
                     name=zone.zone.name,
@@ -68,43 +72,59 @@ async def async_setup_entry(
                     model=detector_model_to_name(zone.zone.model),
                     sw_version=zone.zone.version,
                 )
+
                 detector_type = zone.zone.detector_type
+
             # Specific entity
             if detector_type == DetectorType.WIRELESS_EXTERNAL_MAGNET_DETECTOR:
-                devices.append(HikWirelessExtMagnetDetector(coordinator, zone.zone, entry.entry_id))
+                devices.append(HikWirelessExtMagnetDetector(
+                    coordinator, zone.zone, entry.entry_id))
             if detector_type == DetectorType.DOOR_MAGNETIC_CONTACT_DETECTOR \
                     or detector_type == DetectorType.SLIM_MAGNETIC_CONTACT \
                     or detector_type == DetectorType.MAGNET_SHOCK_DETECTOR:
-                devices.append(HikMagneticContactDetector(coordinator, zone.zone, entry.entry_id))
+                devices.append(HikMagneticContactDetector(
+                    coordinator, zone.zone, entry.entry_id))
             if detector_type == DetectorType.WIRELESS_TEMPERATURE_HUMIDITY_DETECTOR:
-                devices.append(HikHumidity(coordinator, zone.zone, entry.entry_id))
+                devices.append(HikHumidity(
+                    coordinator, zone.zone, entry.entry_id))
+
             # Generic Attrs
             if zone.zone.temperature is not None:
-                devices.append(HikTemperature(coordinator, zone.zone, entry.entry_id))
+                devices.append(HikTemperature(
+                    coordinator, zone.zone, entry.entry_id))
             if zone.zone.charge_value is not None:
-                devices.append(HikBatteryInfo(coordinator, zone.zone, entry.entry_id))
+                devices.append(HikBatteryInfo(
+                    coordinator, zone.zone, entry.entry_id))
             if zone.zone.signal is not None:
-                devices.append(HikSignalInfo(coordinator, zone.zone, entry.entry_id))
+                devices.append(HikSignalInfo(
+                    coordinator, zone.zone, entry.entry_id))
             if zone.zone.tamper_evident is not None:
-                devices.append(HikTamperDetection(coordinator, zone.zone, entry.entry_id))
+                devices.append(HikTamperDetection(
+                    coordinator, zone.zone, entry.entry_id))
             if zone.zone.bypassed is not None:
-                devices.append(HikBypassDetection(coordinator, zone.zone, entry.entry_id))
+                devices.append(HikBypassDetection(
+                    coordinator, zone.zone, entry.entry_id))
             if zone.zone.armed is not None:
-                devices.append(HikArmedInfo(coordinator, zone.zone, entry.entry_id))
+                devices.append(HikArmedInfo(
+                    coordinator, zone.zone, entry.entry_id))
             if zone.zone.alarm is not None:
-                devices.append(HikAlarmInfo(coordinator, zone.zone, entry.entry_id))
+                devices.append(HikAlarmInfo(
+                    coordinator, zone.zone, entry.entry_id))
             if zone.zone.stay_away is not None:
-                devices.append(HikStayAwayInfo(coordinator, zone.zone, entry.entry_id))
+                devices.append(HikStayAwayInfo(
+                    coordinator, zone.zone, entry.entry_id))
             if zone.zone.is_via_repeater is not None:
-                devices.append(HikIsViaRepeaterInfo(coordinator, zone.zone, entry.entry_id))
+                devices.append(HikIsViaRepeaterInfo(
+                    coordinator, zone.zone, entry.entry_id))
             if zone.zone.status is not None:
-                devices.append(HikStatusInfo(coordinator, zone.zone, entry.entry_id))
+                devices.append(HikStatusInfo(
+                    coordinator, zone.zone, entry.entry_id))
+
     _LOGGER.debug("devices: %s", devices)
     async_add_entities(devices, False)
 
 
 class HikDevice:
-
     zone: Zone
     _ref_id: str
 
@@ -112,7 +132,8 @@ class HikDevice:
     def device_info(self) -> DeviceInfo:
         """Return the device info."""
         return DeviceInfo(
-            identifiers={(DOMAIN, str(self._ref_id) + "-" + str(self.zone.id))},
+            identifiers={(DOMAIN, str(self._ref_id) +
+                          "-" + str(self.zone.id))},
             manufacturer="HikVision" if self.zone.model is not None else "Unknown",
             # suggested_area=zone.zone.,
             name=self.zone.name,
@@ -132,7 +153,7 @@ class HikWirelessExtMagnetDetector(CoordinatorEntity, HikDevice, BinarySensorEnt
         self._ref_id = entry_id
         self._attr_unique_id = f"{self.coordinator.device_name}-magnet-{zone.id}"
         self._attr_icon = "mdi:magnet"
-        #self._attr_name = f"Magnet presence"
+        # self._attr_name = f"Magnet presence"
         self._device_class = BinarySensorDeviceClass.PRESENCE
         self._attr_has_entity_name = True
         self.entity_id = f"{SENSOR_DOMAIN}.{coordinator.device_name}-magnet-{zone.id}"
@@ -228,7 +249,7 @@ class HikTemperature(CoordinatorEntity, HikDevice, SensorEntity):
         self._ref_id = entry_id
         self._attr_unique_id = f"{self.coordinator.device_name}-temp-{zone.id}"
         self._attr_icon = "mdi:thermometer"
-        #self._attr_name = f"{self.zone.name} Temperature"
+        # self._attr_name = f"{self.zone.name} Temperature"
         self._device_class = SensorDeviceClass.TEMPERATURE
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         self._attr_has_entity_name = True
@@ -269,7 +290,7 @@ class HikHumidity(CoordinatorEntity, HikDevice, SensorEntity):
         self._ref_id = entry_id
         self._attr_unique_id = f"{self.coordinator.device_name}-humid-{zone.id}"
         self._attr_icon = "mdi:cloud-percent"
-        #self._attr_name = f"{self.zone.name} Humidity"
+        # self._attr_name = f"{self.zone.name} Humidity"
         self._device_class = SensorDeviceClass.HUMIDITY
         self._attr_native_unit_of_measurement = PERCENTAGE
         self._attr_has_entity_name = True
@@ -396,7 +417,7 @@ class HikStatusInfo(CoordinatorEntity, HikDevice, SensorEntity):
         self._attr_has_entity_name = True
         self.entity_id = f"{SENSOR_DOMAIN}.{coordinator.device_name}-status-{zone.id}"
         if self.coordinator.zones and self.coordinator.zones[self.zone.id]\
-            and self.coordinator.zones[self.zone.id].status is not None:
+                and self.coordinator.zones[self.zone.id].status is not None:
             self._attr_native_value = self.coordinator.zones[self.zone.id].status.value
 
     @property
@@ -421,12 +442,11 @@ class HikStatusInfo(CoordinatorEntity, HikDevice, SensorEntity):
                 return "mdi:heart-broken"
         return None
 
-
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         if self.coordinator.zones and self.coordinator.zones[self.zone.id]\
-            and self.coordinator.zones[self.zone.id].status is not None:
+                and self.coordinator.zones[self.zone.id].status is not None:
             self._attr_native_value = self.coordinator.zones[self.zone.id].status.value
         else:
             self._attr_native_value = None

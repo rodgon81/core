@@ -1,15 +1,15 @@
 from typing import Optional, Any
+import hashlib
 
 import requests
 from xml.etree import ElementTree
 import consts
 from .models import SessionLoginCap, SessionLogin
-from .helpers import sha256, xmlBuilder
 from .errors import errors
 from datetime import datetime
 import logging
 import urllib.parse
-
+import xmltodict
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,6 +22,18 @@ class HikAx:
         self.username = username
         self.password = password
         self.cookie = ''
+        self.is_connected = False
+
+    def serialize_object(self, obj):
+        result = f"<{type(obj).__name__}>"
+
+        for prop, value in vars(obj).items():
+            if prop in consts.XML_SERIALIZABLE_NAMES:
+                result += f"<{prop}>{value}</{prop}>"
+
+        result += f"</{type(obj).__name__}>"
+
+        return result
 
     def get_session_params(self):
         q_user = urllib.parse.quote(self.username)
@@ -53,8 +65,10 @@ class HikAx:
     @staticmethod
     def _root_get_value(root, ns, key, default=None) -> Any | None:
         item = root.find(key, ns)
+
         if item is not None:
             return item.text
+
         return default
 
     @staticmethod
@@ -85,18 +99,16 @@ class HikAx:
 
     def encode_password(self, session_cap: SessionLoginCap.SessionLoginCap):
         if session_cap.is_irreversible:
-            result = sha256.sha256(
-                f"{self.username}{session_cap.salt}{self.password}")
-            result = sha256.sha256(f"{result}{session_cap.challenge}")
+            result = hashlib.sha256(str(
+                f"{self.username}{session_cap.salt}{self.password}").encode("utf-8")).hexdigest()
+            result = hashlib.sha256(
+                str(f"{result}{session_cap.challenge}").encode("utf-8")).hexdigest()
 
             for i in range(2, session_cap.iterations):
-                result = sha256.sha256(result)
+                result = hashlib.sha256(
+                    str(result).encode("utf-8")).hexdigest()
         else:
-            result = f"{sha256.sha256(self.password)}{session_cap.challenge}"
-
-            for i in range(1, session_cap.iterations):
-                result = sha256.sha256(result)
-
+            result = None
         return result
 
     def connect(self):
@@ -109,7 +121,9 @@ class HikAx:
 
         encoded_password = self.encode_password(params)
 
-        xml = xmlBuilder.serialize_object(
+        _LOGGER.debug("encoded_password: %s", encoded_password)
+
+        xml = self.serialize_object(
             SessionLogin.SessionLogin(
                 self.username,
                 encoded_password,
@@ -118,13 +132,19 @@ class HikAx:
             )
         )
 
+        _LOGGER.debug("xml: %s", xml)
+
         dt = datetime.now()
         timestamp = datetime.timestamp(dt)
+
         session_login_url = f"http://{self.host}{consts.Endpoints.Session_Login}?timeStamp={int(timestamp)}"
+
         result = False
+
         try:
             login_response: requests.Response = requests.post(
                 session_login_url, xml)
+
             _LOGGER.debug("Connect response")
             _LOGGER.debug("Status: %s", login_response.status_code)
             _LOGGER.debug("Content: %s", login_response.content)
@@ -134,11 +154,13 @@ class HikAx:
 
             if login_response.status_code == 200:
                 cookie = login_response.headers.get("Set-Cookie")
+
                 if cookie is None:
                     root = ElementTree.fromstring(login_response.text)
                     namespaces = {'xmlns': consts.XML_SCHEMA}
                     session_id = HikAx._root_get_value(
                         root, namespaces, "xmlns:sessionID")
+
                     if session_id is not None:
                         cookie = "WebSession=" + session_id
                 else:
@@ -148,6 +170,7 @@ class HikAx:
                     raise Exception("No cookie provided")
 
                 self.cookie = cookie
+                self.is_connected = True
 
                 result = True
         except Exception as e:
@@ -157,129 +180,105 @@ class HikAx:
         return result
 
     @staticmethod
-    def build_url(endpoint, is_json):
+    def build_url(endpoint, is_json: bool = True):
         param_prefix = "&" if "?" in endpoint else "?"
+
         return f"{endpoint}{param_prefix}format=json" if is_json else endpoint
 
-    def _base_json_request(self, url: str, method: consts.Method = consts.Method.GET, data=None):
-        endpoint = self.build_url(url, True)
-        response = self.make_request(endpoint, method, is_json=True, data=data)
+    def make_request(self, endpoint, method, data=None, is_json: bool = True):
+        if self.is_connected:
+            headers = {"Cookie": self.cookie}
 
-        if response.status_code != 200:
-            raise errors.UnexpectedResponseCodeError(
-                response.status_code, response.text)
-        if response.status_code == 200:
-            return response.json()
-
-    def arm_home(self, sub_id: Optional[int] = None):
-        sid = "0xffffffff" if sub_id is None else str(sub_id)
-        response = self._base_json_request(f"http://{self.host}{consts.Endpoints.Alarm_ArmHome.replace('{}', sid)}",
-                                           method=consts.Method.PUT)
-        _LOGGER.debug(response)
-        return response
-
-    def arm_away(self, sub_id: Optional[int] = None):
-        sid = "0xffffffff" if sub_id is None else str(sub_id)
-        return self._base_json_request(f"http://{self.host}{consts.Endpoints.Alarm_ArmAway.replace('{}', sid)}",
-                                       method=consts.Method.PUT)
-
-    def disarm(self, sub_id: Optional[int] = None):
-        sid = "0xffffffff" if sub_id is None else str(sub_id)
-        return self._base_json_request(f"http://{self.host}{consts.Endpoints.Alarm_Disarm.replace('{}', sid)}",
-                                       method=consts.Method.PUT)
-
-    def subsystem_status(self):
-        return self._base_json_request(f"http://{self.host}{consts.Endpoints.SubSystemStatus}")
-
-    def peripherals_status(self):
-        return self._base_json_request(f"http://{self.host}{consts.Endpoints.PeripheralsStatus}")
-
-    def zone_status(self):
-        endpoint = f"http://{self.host}{consts.Endpoints.ZoneStatus}"
-        endpoint = self.build_url(endpoint, True)
-        response = self.make_request(endpoint, consts.Method.GET)
-
-        if response.status_code != 200:
-            raise errors.UnexpectedResponseCodeError(
-                response.status_code, response.text)
-
-        return response.json()
-
-    def bypass_zone(self, zone_id):
-        endpoint = f"http://{self.host}{consts.Endpoints.BypassZone}{zone_id}"
-        endpoint = self.build_url(endpoint, True)
-        response = self.make_request(endpoint, consts.Method.PUT)
-
-        if response.status_code != 200:
-            raise errors.UnexpectedResponseCodeError(
-                response.status_code, response.text)
-
-        return response.status_code == 200
-
-    def recover_bypass_zone(self, zone_id):
-        endpoint = f"http://{self.host}{consts.Endpoints.RecoverBypassZone}{zone_id}"
-        endpoint = self.build_url(endpoint, True)
-        response = self.make_request(endpoint, consts.Method.PUT)
-
-        return response.status_code == 200
-
-    def get_interface_mac_address(self, interface_id):
-        endpoint = f"http://{self.host}{consts.Endpoints.InterfaceInfo}"
-
-        response = self.make_request(endpoint, consts.Method.GET)
-
-        if response.status_code == 200:
-            return xmlBuilder.get_mac_address_of_interface(response.text, interface_id)
-
-        return ''
-
-    def get_area_arm_status(self, area_id):
-        endpoint = f"http://{self.host}{consts.Endpoints.AreaArmStatus}"
-        endpoint = self.build_url(endpoint, True)
-
-        data = {"SubSysList": [{"SubSys": {"id": area_id}}]}
-
-        response = self.make_request(
-            endpoint, consts.Method.POST, data=data, is_json=True)
-
-        try:
-            if response.status_code == 200:
-                response_json = response.json()
-                return response_json["ArmStatusList"][0]["ArmStatus"]["status"]
-        except:
-            return ''
-        return ''
-
-    def host_status(self):
-        return self._base_json_request(f"http://{self.host}{consts.Endpoints.HostStatus}")
-
-    def siren_status(self):
-        return self._base_json_request(f"http://{self.host}{consts.Endpoints.SirenStatus}")
-
-    def keypad_status(self):
-        return self._base_json_request(f"http://{self.host}{consts.Endpoints.KeypadStatus}")
-
-    def repeater_status(self):
-        return self._base_json_request(f"http://{self.host}{consts.Endpoints.RepeaterStatus}")
-
-    def make_request(self, endpoint, method, data=None, is_json=False):
-        # self.connect()
-
-        headers = {"Cookie": self.cookie}
-
-        if method == consts.Method.GET:
-            response = requests.get(endpoint, headers=headers)
-        elif method == consts.Method.POST:
-            if is_json:
-                response = requests.post(endpoint, json=data, headers=headers)
+            if method == consts.Method.GET:
+                response = requests.get(endpoint, headers=headers)
+            elif method == consts.Method.POST:
+                if is_json:
+                    response = requests.post(
+                        endpoint, json=data, headers=headers)
+                else:
+                    response = requests.post(
+                        endpoint, data=data, headers=headers)
+            elif method == consts.Method.PUT:
+                if is_json:
+                    response = requests.put(
+                        endpoint, json=data, headers=headers)
+                else:
+                    response = requests.put(
+                        endpoint, data=data, headers=headers)
             else:
-                response = requests.post(endpoint, data=data, headers=headers)
-        elif method == consts.Method.PUT:
-            if is_json:
-                response = requests.put(endpoint, json=data, headers=headers)
-            else:
-                response = requests.put(endpoint, data=data, headers=headers)
+                return None
+
+            return response
         else:
             return None
 
-        return response
+    def _base_request(self, url: str, method: consts.Method = consts.Method.GET, data=None, is_json: bool = True):
+        endpoint = self.build_url(url, is_json)
+        response = self.make_request(endpoint, method, is_json, data)
+
+        _LOGGER.debug(response)
+
+        if response.status_code != 200:
+            raise errors.UnexpectedResponseCodeError(
+                response.status_code, response.text)
+        if response.status_code == 200:
+            if is_json:
+                return response.json()
+            else:
+                return response.text
+
+    def arm_home(self, sub_id: Optional[int] = None):
+        sid = "0xffffffff" if sub_id is None else str(sub_id)
+        return self._base_request(f"http://{self.host}{consts.Endpoints.Alarm_ArmHome.replace('{}', sid)}", consts.Method.PUT)
+
+    def arm_away(self, sub_id: Optional[int] = None):
+        sid = "0xffffffff" if sub_id is None else str(sub_id)
+        return self._base_request(f"http://{self.host}{consts.Endpoints.Alarm_ArmAway.replace('{}', sid)}", consts.Method.PUT)
+
+    def disarm(self, sub_id: Optional[int] = None):
+        sid = "0xffffffff" if sub_id is None else str(sub_id)
+        return self._base_request(f"http://{self.host}{consts.Endpoints.Alarm_Disarm.replace('{}', sid)}", consts.Method.PUT)
+
+    def subsystem_status(self):
+        return self._base_request(f"http://{self.host}{consts.Endpoints.SubSystemStatus}")
+
+    def peripherals_status(self):
+        return self._base_request(f"http://{self.host}{consts.Endpoints.PeripheralsStatus}")
+
+    def zone_status(self):
+        return self._base_request(f"http://{self.host}{consts.Endpoints.ZoneStatus}")
+
+    def bypass_zone(self, zone_id):
+        return self._base_request(f"http://{self.host}{consts.Endpoints.BypassZone}{zone_id}", consts.Method.PUT)
+
+    def recover_bypass_zone(self, zone_id):
+        return self._base_request(f"http://{self.host}{consts.Endpoints.RecoverBypassZone}{zone_id}", consts.Method.PUT)
+
+    def get_area_arm_status(self, area_id):
+        data = {"SubSysList": [{"SubSys": {"id": area_id}}]}
+
+        response = self._base_request(
+            f"http://{self.host}{consts.Endpoints.AreaArmStatus}", consts.Method.POST, data)
+
+        return response["ArmStatusList"][0]["ArmStatus"]["status"]
+
+    def host_status(self):
+        return self._base_request(f"http://{self.host}{consts.Endpoints.HostStatus}")
+
+    def siren_status(self):
+        return self._base_request(f"http://{self.host}{consts.Endpoints.SirenStatus}")
+
+    def keypad_status(self):
+        return self._base_request(f"http://{self.host}{consts.Endpoints.KeypadStatus}")
+
+    def repeater_status(self):
+        return self._base_request(f"http://{self.host}{consts.Endpoints.RepeaterStatus}")
+
+    def get_device_info(self):
+        response = self._base_request(
+            f"http://{self.host}/ISAPI/System/deviceInfo", is_json=False)
+
+        return xmltodict.parse(response)
+
+    def load_devices(self):
+        return self._base_request(f"http://{self.host}{consts.Endpoints.ZonesConfig}")

@@ -1,6 +1,6 @@
 class SessionLogin:
     def __init__(self, username, encoded_password, session_id, session_id_version):
-        self.username = username
+        self.userName = username
         self.password = encoded_password
-        self.session_id = session_id
-        self.session_id_version = session_id_version
+        self.sessionID = session_id
+        self.sessionIDVersion = session_id_version

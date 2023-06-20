@@ -76,6 +76,7 @@ include = ["homeassistant*"]
 
 [tool.black]
 extend-exclude = "/generated/"
+line-length = 200
 
 [tool.isort]
 # https://github.com/PyCQA/isort/wiki/isort-Settings
@@ -217,7 +218,7 @@ overgeneral-exceptions = [
 runtime-typing = false
 
 [tool.pylint.CODE_STYLE]
-max-line-length-suggestions = 72
+max-line-length-suggestions = 200
 
 [tool.pylint-per-file-ignores]
 # hass-component-root-import: Tests test non-public APIs

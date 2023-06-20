@@ -5,7 +5,6 @@ from datetime import timedelta
 from typing import Optional
 from collections.abc import Callable
 
-import xmltodict
 from .hikax import hikax
 
 from async_timeout import timeout
@@ -34,7 +33,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import DATA_COORDINATOR, DOMAIN, USE_CODE_ARMING, INTERNAL_API, ENABLE_DEBUG_OUTPUT
 from .model import ZonesResponse, Zone, SubSystemResponse, SubSys, Arming, ZonesConf, ZoneConfig
 
-PLATFORMS: list[Platform] = [Platform.ALARM_CONTROL_PANEL, Platform.SENSOR]
+PLATFORMS: list[Platform] = [
+    Platform.ALARM_CONTROL_PANEL, Platform.SENSOR, Platform.BUTTON]
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -77,15 +77,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_SCAN_INTERVAL, SCAN_INTERVAL.total_seconds())
 
     if entry.data.get(ENABLE_DEBUG_OUTPUT):
-        try:
-            axpro.set_logging_level(logging.DEBUG)
-        except:
-            pass
+        axpro.set_logging_level(logging.DEBUG)
 
     coordinator = HikAxProDataUpdateCoordinator(
         hass,
         axpro,
-        "",
         use_code,
         code_format,
         use_code_arming,
@@ -125,18 +121,19 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
     axpro: hikax.HikAx
     zone_status: Optional[ZonesResponse]
     zones: Optional[dict[int, Zone]] = None
-    device_info: Optional[dict] = None
     device_model: Optional[str] = None
     device_name: Optional[str] = None
     sub_systems: dict[int, SubSys] = {}
     """ Zones aka devices """
     devices: dict[int, ZoneConfig] = {}
+    mac: Optional[str] = None
+    firmware_version: Optional[str] = None
+    firmware_released_date: Optional[str] = None
 
     def __init__(
         self,
         hass,
         axpro: hikax.HikAx,
-        mac,
         use_code,
         code_format,
         use_code_arming,
@@ -147,7 +144,6 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         self.state = None
         self.zone_status = None
         self.host = axpro.host
-        self.mac = mac
         self.use_code = use_code
         self.code_format = code_format
         self.use_code_arming = use_code_arming
@@ -155,49 +151,33 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         super().__init__(hass, _LOGGER, name=DOMAIN,
                          update_interval=timedelta(seconds=update_interval))
 
-    def _get_device_info(self):
-        endpoint = self.axpro.build_url(
-            f"http://{self.host}/ISAPI/System/deviceInfo", False)
-        response = self.axpro.make_request(endpoint, "GET", False)
-
-        if response.status_code != 200:
-            raise hikax.errors.UnexpectedResponseCodeError(
-                response.status_code, response.text)
-        _LOGGER.debug(response.text)
-        return xmltodict.parse(response.text)
-
     def init_device(self):
         self.axpro.connect()
-        # self.device_info = self._get_device_info()
-        # self.mac = self.axpro.get_interface_mac_address()
-        # self.device_name = self.device_info['DeviceInfo']['deviceName']
-        # self.device_model = self.device_info['DeviceInfo']['model']
-        # _LOGGER.debug(self.device_info)
-        # self.load_devices()
-        # self._update_data()
+        self.load_device_info()
+        self.load_devices()
+        self._update_data()
+
+    def load_device_info(self):
+        device_info = self.axpro.get_device_info()
+        if device_info is not None:
+            self.mac = device_info['DeviceInfo']['macAddress']
+            self.device_name = device_info['DeviceInfo']['deviceName']
+            self.device_model = device_info['DeviceInfo']['model']
+            self.firmware_version = device_info['DeviceInfo']['firmwareVersion']
+            self.firmware_released_date = device_info['DeviceInfo']['firmwareReleasedDate']
 
     def load_devices(self):
-        devices = self._load_devices()
+        devices = ZonesConf.from_dict(self.axpro.load_devices())
         if devices is not None:
             self.devices = {}
             for item in devices.list:
                 self.devices[item.zone.id] = item.zone
 
-    def _load_devices(self) -> ZonesConf:
-        endpoint = self.axpro.build_url(
-            f"http://{self.host}" + hikax.consts.Endpoints.ZonesConfig, True)
-        response = self.axpro.make_request(endpoint, "GET", False)
-
-        if response.status_code != 200:
-            raise hikax.errors.UnexpectedResponseCodeError(
-                response.status_code, response.text)
-        _LOGGER.debug(response.text)
-        return ZonesConf.from_dict(response.json())
-
     def _update_data(self) -> None:
         """Fetch data from axpro via sync functions."""
         status = STATE_ALARM_DISARMED
         status_json = self.axpro.subsystem_status()
+
         try:
             subsys_resp = SubSystemResponse.from_dict(status_json)
             subsys_arr: list[SubSys] = []
@@ -224,6 +204,7 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
                     break
         except:
             _LOGGER.warning("Error getting status: %s", status_json)
+
         _LOGGER.debug("Axpro status: %s", status)
         self.state = status
 
@@ -231,8 +212,10 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         zone_status = ZonesResponse.from_dict(zone_response)
         self.zone_status = zone_status
         zones = {}
+
         for zone in zone_status.zone_list:
             zones[zone.zone.id] = zone.zone
+
         self.zones = zones
         _LOGGER.debug("Zones: %s", zone_response)
 
@@ -270,3 +253,8 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         if is_success:
             await self._async_update_data()
             await self.async_request_refresh()
+
+    async def test_button(self):
+        """Disarm alarm control panel."""
+
+        _LOGGER.debug("Boton apretado")
