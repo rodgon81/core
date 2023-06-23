@@ -1,0 +1,55 @@
+{
+    "config": {
+      "step": {
+        "user": {
+          "data": {
+            "host": "[%key:common::config_flow::data::host%]",
+            "username": "[%key:common::config_flow::data::username%]",
+            "password": "[%key:common::config_flow::data::password%]",
+            "use_code_arming": "[%key:common::config_flow::data::use_code_arming%]",
+            "use_code_disarming": "[%key:common::config_flow::data::use_code_disarming%]",
+            "code": "[%key:common::config_flow::data::code%]",
+            "scan_interval": "[%key:common::config_flow::data::scan_interval%]",
+            "allow_subsystems": "[%key:common::config_flow::data::allow_subsystems%]",
+            "enable_debug_output": "[%key:common::config_flow::data::enable_debug_output%]"
+          }
+        }
+      },
+      "error": {
+        "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+        "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+        "invalid_code": "[%key:common::config_flow::error::invalid_code%]",
+        "unknown": "[%key:common::config_flow::error::unknown%]"
+      },
+      "abort": {
+        "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      }
+    },
+    "options": {
+      "step": {
+        "init": {
+          "data": {
+            "host": "[%key:common::config_flow::data::host%]",
+            "username": "[%key:common::config_flow::data::username%]",
+            "password": "[%key:common::config_flow::data::password%]",
+            "use_code_arming": "[%key:common::config_flow::data::use_code_arming%]",
+            "use_code_disarming": "[%key:common::config_flow::data::use_code_disarming%]",
+            "code": "[%key:common::config_flow::data::code%]",
+            "scan_interval": "[%key:common::config_flow::data::scan_interval%]",
+            "allow_subsystems": "[%key:common::config_flow::data::allow_subsystems%]",
+            "enable_debug_output": "[%key:common::config_flow::data::enable_debug_output%]"
+          }
+        }
+      },
+      "error": {
+        "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+        "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+        "invalid_code": "[%key:common::config_flow::error::invalid_code%]",
+        "unknown": "[%key:common::config_flow::error::unknown%]"
+      },
+      "abort": {
+        "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      }
+    }
+  }
+  
