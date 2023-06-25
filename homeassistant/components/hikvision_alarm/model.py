@@ -424,18 +424,11 @@ class SubSys:
     def from_dict(obj: Any) -> 'SubSys':
         assert isinstance(obj, dict)
         id = from_int(obj.get("id"))
-        try:
-            arming = Arming(obj.get("arming"))
-        except:
-            _LOGGER.warning("Invalid subsys attr arming %s", obj.get("arming"))
-            _LOGGER.warning("Subsys: %s", obj)
-            arming = None
+        arming = Arming(obj.get("arming"))
         alarm = from_bool(obj.get("alarm"))
         enabled = from_union([from_bool, from_none], obj.get("enabled"))
-        if enabled is None:
-            enabled = True
         name = from_union([from_str, from_none], obj.get("name"))
-        delay_time = from_union([from_int, from_none], obj.get("delayTime"))
+        delay_time = 10
         return SubSys(id, arming, alarm, enabled, name, delay_time)
 
     def to_dict(self) -> dict:

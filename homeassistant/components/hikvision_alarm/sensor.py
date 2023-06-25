@@ -34,48 +34,32 @@ async def async_setup_entry(
 
     coordinator: HikAxProDataUpdateCoordinator = hass.data[DOMAIN][DATA_COORDINATOR]
     devices = []
+
     await coordinator.async_request_refresh()
-    device_registry = dr.async_get(hass)
 
     if coordinator.zone_status is not None:
         for zone in coordinator.zone_status.zone_list:
             zone_config = coordinator.devices.get(zone.zone.id)
+
+            # _LOGGER.debug("Adding device with zone config: %s", zone)
+            # _LOGGER.debug("+ config: %s", zone_config)
+
+            device_registry = dr.async_get(hass)
+            device_registry.async_get_or_create(
+                config_entry_id=entry.entry_id,
+                # connections={},
+                identifiers={(DOMAIN, str(entry.entry_id) + \
+                              "-" + str(zone_config.id))},
+                manufacturer="HikVision" if zone.zone.model is not None else "Unknown",
+                # suggested_area=zone.zone.,
+                name=zone_config.zone_name,
+                via_device=(DOMAIN, str(coordinator.id)),
+                model=detector_model_to_name(zone.zone.model),
+                sw_version=zone.zone.version,
+            )
+
             detector_type: DetectorType | None
-
-            if zone_config is not None:
-                # _LOGGER.debug("Adding device with zone config: %s", zone)
-                # _LOGGER.debug("+ config: %s", zone_config)
-
-                device_registry.async_get_or_create(
-                    config_entry_id=entry.entry_id,
-                    # connections={},
-                    identifiers={(DOMAIN, str(entry.entry_id) + \
-                                  "-" + str(zone_config.id))},
-                    manufacturer="HikVision" if zone.zone.model is not None else "Unknown",
-                    # suggested_area=zone.zone.,
-                    name=zone_config.zone_name,
-                    via_device=(DOMAIN, str(coordinator.mac)),
-                    model=detector_model_to_name(zone.zone.model),
-                    sw_version=zone.zone.version,
-                )
-                detector_type = zone_config.detector_type
-            else:
-                # _LOGGER.debug("Adding device: %s", zone)
-
-                device_registry.async_get_or_create(
-                    config_entry_id=entry.entry_id,
-                    # connections={},
-                    identifiers={(DOMAIN, str(entry.entry_id) + \
-                                  "-" + str(zone.zone.id))},
-                    manufacturer="HikVision" if zone.zone.model is not None else "Unknown",
-                    # suggested_area=zone.zone.,
-                    name=zone.zone.name,
-                    via_device=(DOMAIN, str(coordinator.mac)),
-                    model=detector_model_to_name(zone.zone.model),
-                    sw_version=zone.zone.version,
-                )
-
-                detector_type = zone.zone.detector_type
+            detector_type = zone_config.detector_type
 
             # Specific entity
             if detector_type == DetectorType.WIRELESS_EXTERNAL_MAGNET_DETECTOR:

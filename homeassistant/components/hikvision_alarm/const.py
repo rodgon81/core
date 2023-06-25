@@ -35,6 +35,13 @@ CONF_USE_CODE_DISARMING: Final[str] = "use_code_disarming"
 CONF_ALLOW_SUBSYSTEMS: Final[str] = "allow_subsystems"
 CONF_ENABLE_DEBUG_OUTPUT: Final[str] = "enable_debug_output"
 
+ATTR_TYPE = "type"
+ATTR_AREA = "area"
+ATTR_MASTER = "master"
+ATTR_ENABLED = "enabled"
+ATTR_AREA_LIMIT = "area_limit"
+ATTR_CODE_ARM_REQUIRED = "code_arm_required"
+ATTR_CODE_DISARM_REQUIRED = "code_disarm_required"
 
 NAME = "Alarm"
 MANUFACTURER = "Hikvision"

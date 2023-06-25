@@ -1,9 +1,11 @@
 from __future__ import annotations
 import logging
-from homeassistant.config_entries import ConfigEntry
 import functools
 import operator
 import datetime
+import homeassistant.util.dt as dt_util
+
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_CODE_FORMAT,
     STATE_ALARM_ARMED_AWAY,
@@ -18,7 +20,6 @@ from homeassistant.const import (
     ATTR_NAME,
 )
 
-import homeassistant.util.dt as dt_util
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -35,7 +36,6 @@ from homeassistant.components.alarm_control_panel import (
 )
 
 from homeassistant.util import slugify
-
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
@@ -46,9 +46,19 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.helpers import device_registry as dr
 from . import const
-from . import HikAxProDataUpdateCoordinator, SubSys, Arming
+from . import HikAxProDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup(hass, config):
+    """Track states and offer events for alarm_control_panel."""
+    return True
+
+
+async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
+    """Set up the platform from config."""
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
@@ -72,26 +82,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         hass.data[const.DOMAIN]["areas"][area.id] = alarm_entity
         async_add_entities([alarm_entity])
 
-    if bool(entry.data.get(const.CONF_ALLOW_SUBSYSTEMS, False)):
-        for area in coordinator.sub_systems.values():
-            async_add_alarm_entity(area)
+    async_dispatcher_connect(
+        hass, "alarmo_register_entity", async_add_alarm_entity)
 
     @callback
-    def async_add_alarm_master():
+    def async_add_alarm_master(config: dict):
         """Add each entity as Alarm Control Panel."""
-        entity_id = "{}.{}".format(PLATFORM, slugify(coordinator.device_name))
+        entity_id = "{}.{}".format(PLATFORM, slugify(config[ATTR_NAME]))
 
         alarm_entity = AlarmoMasterEntity(
             hass=hass,
             entity_id=entity_id,
-            name=coordinator.device_name,
+            name=config[ATTR_NAME],
             coordinator=coordinator
         )
         hass.data[const.DOMAIN]["master"] = alarm_entity
         async_add_entities([alarm_entity])
 
-    async_add_alarm_master()
+    async_dispatcher_connect(
+        hass, "alarmo_register_master", async_add_alarm_master)
 
+    # este desencadena las llamadas internas que se haces desde el init
     async_dispatcher_send(hass, "alarmo_platform_loaded")
 
     # Register services
@@ -111,11 +122,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class AlarmoBaseEntity(CoordinatorEntity, AlarmControlPanelEntity, RestoreEntity):
+    coordinator: HikAxProDataUpdateCoordinator
+
     def __init__(self, hass: HomeAssistant, name: str, entity_id: str, coordinator) -> None:
         """Initialize the alarm_control_panel entity."""
 
         super().__init__(coordinator=coordinator)
-
+        self.coordinator = coordinator
         self.entity_id = entity_id
         self._name = name
         self._state = None
@@ -130,15 +143,17 @@ class AlarmoBaseEntity(CoordinatorEntity, AlarmControlPanelEntity, RestoreEntity
         self.area_id = None
         self._revert_state = None
 
+    _attr_supported_features = (
+        AlarmControlPanelEntityFeature.ARM_HOME
+        | AlarmControlPanelEntityFeature.ARM_AWAY
+    )
+
     @property
     def device_info(self) -> dict:
         """Return info for device registry."""
         return {
-            "identifiers": {(const.DOMAIN, self.hass.data[const.DOMAIN]["coordinator"].mac)},
-            "name": const.NAME,
-            "model": const.NAME,
-            "sw_version": "1.0",
-            "manufacturer": const.MANUFACTURER,
+            "identifiers": {(const.DOMAIN, self.coordinator.id)},
+
         }
 
     @property
@@ -281,8 +296,8 @@ class AlarmoBaseEntity(CoordinatorEntity, AlarmControlPanelEntity, RestoreEntity
         elif not code or len(code) < 1:
             return (False, const.EVENT_NO_CODE_PROVIDED)
 
-        res = self.hass.data[const.DOMAIN]["coordinator"].async_authenticate_user(
-            code)
+        res = self.coordinator.async_authenticate_user(code)
+
         if not res:
             # wrong code was entered
             return (False, const.EVENT_INVALID_CODE_PROVIDED)
@@ -537,8 +552,7 @@ class AlarmoMasterEntity(AlarmoBaseEntity):
                 async_call_later(self.hass, 1, async_update_config)
                 return
 
-            coordinator = self.hass.data[const.DOMAIN]["coordinator"]
-            self._config = coordinator.store.async_get_config()
+            self._config = self.coordinator.store.async_get_config()
 
             await self.async_update_state()
             self.async_write_ha_state()
@@ -729,7 +743,7 @@ class AlarmoMasterEntity(AlarmoBaseEntity):
             await self.async_arm_failure(open_sensors, context_id=context_id)
         else:
             delay = 0
-            area_config = self.hass.data[const.DOMAIN]["coordinator"].store.async_get_areas(
+            area_config = self.coordinator.store.async_get_areas(
             )
             for (area_id, entity) in self.hass.data[const.DOMAIN]["areas"].items():
                 if entity.state == STATE_ALARM_ARMING:
@@ -788,9 +802,8 @@ class AlarmoAreaEntity(AlarmoBaseEntity):
 
         self.area_id = area_id
         self._timer = None
-        coordinator = self.hass.data[const.DOMAIN]["coordinator"]
-        self._config = coordinator.store.async_get_config()
-        # self._config.update(coordinator.store.async_get_area(self.area_id))
+        self._config = self.coordinator.store.async_get_config()
+        # self._config.update(self.coordinator.store.async_get_area(self.area_id))
         self.sys = sub_system
 
     @property
@@ -815,9 +828,9 @@ class AlarmoAreaEntity(AlarmoBaseEntity):
         @callback
         async def async_update_config(area_id: str = None):
             _LOGGER.debug("async_update_config")
-            coordinator = self.hass.data[const.DOMAIN]["coordinator"]
-            self._config = coordinator.store.async_get_config()
-            self._config.update(coordinator.store.async_get_area(self.area_id))
+            self._config = self.coordinator.store.async_get_config()
+            self._config.update(
+                self.coordinator.store.async_get_area(self.area_id))
             self.async_write_ha_state()
 
         self.async_on_remove(

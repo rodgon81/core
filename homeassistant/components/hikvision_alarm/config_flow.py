@@ -1,11 +1,9 @@
 """Config flow for hikvision_axpro integration."""
 import logging
-from typing import Any, Final
-
 import voluptuous as vol
 
+from typing import Any, Final
 from .hikax import HikAx
-
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
@@ -17,9 +15,18 @@ from homeassistant.const import (
     CONF_USERNAME,
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
+    ATTR_NAME,
+    ATTR_CODE_FORMAT,
+)
+from . import HikAxProDataUpdateCoordinator
+from homeassistant.helpers import config_validation as cv
+
+from homeassistant.components.alarm_control_panel import (
+    CodeFormat,
+    ATTR_CODE_ARM_REQUIRED,
 )
 
-from .const import DOMAIN, CONF_USE_CODE_ARMING, CONF_USE_CODE_DISARMING, CONF_ALLOW_SUBSYSTEMS, CONF_ENABLE_DEBUG_OUTPUT
+from . import const
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,15 +34,19 @@ SCAN_INTERVAL: Final = timedelta(seconds=5)
 
 CONFIGURE_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_HOST, default="192.168.1.9"): str,
-        vol.Required(CONF_USERNAME, default="admin"): str,
-        vol.Required(CONF_PASSWORD, default="Elparaiso81"): str,
-        vol.Optional(CONF_USE_CODE_ARMING, default=True): bool,
-        vol.Required(CONF_USE_CODE_DISARMING, default=True): bool,
-        vol.Optional(CONF_CODE, default="2854"): str,
+        vol.Required(CONF_HOST, default="192.168.1.9"): cv.string,
+        vol.Required(CONF_USERNAME, default="admin"): cv.string,
+        vol.Required(CONF_PASSWORD, default="Elparaiso81"): cv.string,
+        vol.Optional(ATTR_CODE_ARM_REQUIRED, default=True): cv.boolean,
+        vol.Required(const.ATTR_CODE_DISARM_REQUIRED, default=True): cv.boolean,
+        vol.Required(ATTR_CODE_FORMAT, default=CodeFormat.NUMBER): vol.In(
+            [CodeFormat.NUMBER, CodeFormat.TEXT]
+        ),
+        vol.Required(const.ATTR_ENABLED, default=True): cv.boolean,
+        vol.Optional(ATTR_NAME, default="Maestro"): cv.string,
+        vol.Optional(const.CONF_CODE, default="2854"): str,
         vol.Required(CONF_SCAN_INTERVAL, default=SCAN_INTERVAL.total_seconds()): int,
-        vol.Optional(CONF_ALLOW_SUBSYSTEMS, default=True): bool,
-        vol.Optional(CONF_ENABLE_DEBUG_OUTPUT, default=True): bool,
+        vol.Optional(const.CONF_ENABLE_DEBUG_OUTPUT, default=True): cv.boolean,
     }
 )
 
@@ -86,7 +97,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
 
-    if data[CONF_USE_CODE_ARMING] or data[CONF_USE_CODE_DISARMING]:
+    if data[ATTR_CODE_ARM_REQUIRED] or data[const.ATTR_CODE_DISARM_REQUIRED]:
         if (data[CONF_CODE] is None or data[CONF_CODE] == "" or not str.isdigit(data[CONF_CODE])):
             raise InvalidCode
 
@@ -96,10 +107,10 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     if not await hub.authenticate():
         raise InvalidAuth
 
-    return {"title": f"{DOMAIN}_{data[CONF_HOST]}"}
+    return {"title": f"{const.DOMAIN}_{data[CONF_HOST]}"}
 
 
-class AxProConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class AxProConfigFlow(config_entries.ConfigFlow, domain=const.DOMAIN):
     """Handle a config flow for hikvision_axpro."""
 
     @staticmethod
@@ -169,6 +180,10 @@ class AxProOptionsFlowHandler(config_entries.OptionsFlow):
             errors["base"] = "unknown"
         else:
             _LOGGER.debug("Saving options %s %s", info["title"], user_input)
+
+            coordinator: HikAxProDataUpdateCoordinator = self.hass.data[
+                const.DOMAIN][const.DATA_COORDINATOR]
+            await coordinator.async_update_config(user_input)
 
             self.hass.config_entries.async_update_entry(
                 self.config_entry,
