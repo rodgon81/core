@@ -75,15 +75,13 @@ class AxHub:
     """Helper class for validation and setup ops."""
 
     def __init__(self, host: str, username: str, password: str, hass: HomeAssistant) -> None:
-        self.host = host
-        self.username = username
-        self.password = password
         self.axpro = HikAx(host, username, password)
         self.hass = hass
 
     async def authenticate(self) -> bool:
         """Check the provided credentials by connecting to ax pro."""
         is_connect_success = await self.hass.async_add_executor_job(self.axpro.connect)
+
         return is_connect_success
 
 

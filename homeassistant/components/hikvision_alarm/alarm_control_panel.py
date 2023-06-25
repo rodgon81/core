@@ -69,9 +69,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     @callback
     def async_add_alarm_entity(area):
         """Add each entity as Alarm Control Panel."""
-        entity_id = "{}.{}".format(PLATFORM, slugify(area.name))
-
-        alarm_entity = AlarmoAreaEntity(hass=hass, entity_id=entity_id, name=area.name, area_id=area.id, coordinator=coordinator)
+        alarm_entity = AlarmoAreaEntity(hass=hass, name=area.name, area_id=area.id)
         hass.data[const.DOMAIN]["areas"][area.id] = alarm_entity
         async_add_entities([alarm_entity])
 
@@ -80,9 +78,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     @callback
     def async_add_alarm_master(config: dict):
         """Add each entity as Alarm Control Panel."""
-        entity_id = "{}.{}".format(PLATFORM, slugify(config[ATTR_NAME]))
-
-        alarm_entity = AlarmoMasterEntity(hass=hass, entity_id=entity_id, name=config[ATTR_NAME], coordinator=coordinator)
+        alarm_entity = AlarmoMasterEntity(hass=hass, name=config[ATTR_NAME])
         hass.data[const.DOMAIN]["master"] = alarm_entity
         async_add_entities([alarm_entity])
 
@@ -109,14 +105,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class AlarmoBaseEntity(CoordinatorEntity, AlarmControlPanelEntity, RestoreEntity):
-    coordinator: HikAxProDataUpdateCoordinator
-
-    def __init__(self, hass: HomeAssistant, name: str, entity_id: str, coordinator) -> None:
+    def __init__(self, hass: HomeAssistant, name: str) -> None:
         """Initialize the alarm_control_panel entity."""
 
-        super().__init__(coordinator=coordinator)
-        self.coordinator = coordinator
-        self.entity_id = entity_id
+        self.entity_id = "{}.{}".format(PLATFORM, slugify(name))
         self._name = name
         self._state = None
         self.hass = hass
@@ -129,6 +121,9 @@ class AlarmoBaseEntity(CoordinatorEntity, AlarmControlPanelEntity, RestoreEntity
         self.expiration = None
         self.area_id = None
         self._revert_state = None
+
+        coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][const.DATA_COORDINATOR]
+        super().__init__(coordinator=coordinator)
 
     @property
     def device_info(self) -> dict:
@@ -474,9 +469,9 @@ class AlarmoBaseEntity(CoordinatorEntity, AlarmControlPanelEntity, RestoreEntity
 class AlarmoMasterEntity(AlarmoBaseEntity):
     """Representation of Hikvision Ax Pro alarm panel."""
 
-    def __init__(self, hass: HomeAssistant, name: str, entity_id: str, coordinator) -> None:
+    def __init__(self, hass: HomeAssistant, name: str) -> None:
         """Initialize the alarm_control_panel entity."""
-        super().__init__(hass, name, entity_id, coordinator)
+        super().__init__(hass, name)
         self.area_id = None
         self._target_state = None
 
@@ -686,9 +681,9 @@ class AlarmoMasterEntity(AlarmoBaseEntity):
 class AlarmoAreaEntity(AlarmoBaseEntity):
     """Representation of Hikvision Ax Pro alarm panel."""
 
-    def __init__(self, hass: HomeAssistant, name: str, entity_id: str, area_id: str, coordinator) -> None:
+    def __init__(self, hass: HomeAssistant, name: str, area_id: str) -> None:
         """Initialize the alarm_control_panel entity."""
-        super().__init__(hass, name, entity_id, coordinator)
+        super().__init__(hass, name)
 
         self.area_id = area_id
         self._timer = None

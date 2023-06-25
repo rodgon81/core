@@ -45,6 +45,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .model import ZonesResponse, Zone, SubSystemResponse, SubSys, Arming, ZonesConf, ZoneConfig
 from .websockets import async_register_websockets
 from . import const
+
+# from .automations import AutomationHandler
 from .event import EventHandler
 
 PLATFORMS: list[Platform] = [Platform.ALARM_CONTROL_PANEL, Platform.SENSOR, Platform.BUTTON]
@@ -185,7 +187,7 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
     @callback
     def setup_alarm_entities(self):
         _LOGGER.debug("setup_alarm_entities")
-
+        # self.hass.data[const.DOMAIN]["automation_handler"] = AutomationHandler(self.hass)
         self.hass.data[const.DOMAIN]["event_handler"] = EventHandler(self.hass)
 
         areas = self.sub_systems  # self.store.async_get_areas()
