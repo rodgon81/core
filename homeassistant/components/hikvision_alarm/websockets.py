@@ -24,13 +24,16 @@ _LOGGER = logging.getLogger(__name__)
 async def handle_subscribe_updates(hass, connection, msg):
     """Handle subscribe updates."""
 
+    # con esto desde el cliente damos inicio a la comunicacion wensoket con el servidor y de esta forma el servidor reenvia los eventos al cliente
     @callback
     def async_handle_event(event: str, area_id: str, args: dict = {}):
         """Forward events to websocket."""
         data = dict(**args, **{"event": event, "area_id": area_id})
+
         connection.send_message({"id": msg["id"], "type": "event", "event": {"data": data}})
 
     connection.subscriptions[msg["id"]] = async_dispatcher_connect(hass, "alarmo_event", async_handle_event)
+
     connection.send_result(msg["id"])
 
 
@@ -38,7 +41,9 @@ async def handle_subscribe_updates(hass, connection, msg):
 def websocket_get_config(hass, connection, msg):
     """Publish config data."""
     coordinator = hass.data[const.DOMAIN][const.DATA_COORDINATOR]
+
     config = coordinator.store.async_get_config()
+
     connection.send_result(msg["id"], config)
 
 

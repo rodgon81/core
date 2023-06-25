@@ -43,6 +43,19 @@ ATTR_AREA_LIMIT = "area_limit"
 ATTR_CODE_ARM_REQUIRED = "code_arm_required"
 ATTR_CODE_DISARM_REQUIRED = "code_disarm_required"
 
+ATTR_IS_OVERRIDE_CODE = "is_override_code"
+ATTR_AREA_LIMIT = "area_limit"
+ATTR_CODE_FORMAT = "code_format"
+ATTR_CODE_LENGTH = "code_length"
+
+
+COMMAND_ARM_NIGHT = "arm_night"
+COMMAND_ARM_AWAY = "arm_away"
+COMMAND_ARM_HOME = "arm_home"
+COMMAND_ARM_CUSTOM_BYPASS = "arm_custom_bypass"
+COMMAND_ARM_VACATION = "arm_vacation"
+COMMAND_DISARM = "disarm"
+
 NAME = "Alarm"
 MANUFACTURER = "Hikvision"
 
@@ -106,6 +119,14 @@ ARM_MODE_TO_STATE = {
     "night": STATE_ALARM_ARMED_NIGHT,
     "custom": STATE_ALARM_ARMED_CUSTOM_BYPASS,
     "vacation": STATE_ALARM_ARMED_VACATION,
+}
+
+STATE_TO_ARM_MODE = {
+    STATE_ALARM_ARMED_AWAY: "away",
+    STATE_ALARM_ARMED_HOME: "home",
+    STATE_ALARM_ARMED_NIGHT: "night",
+    STATE_ALARM_ARMED_CUSTOM_BYPASS: "custom",
+    STATE_ALARM_ARMED_VACATION: "vacation",
 }
 
 MODES_TO_SUPPORTED_FEATURES = {

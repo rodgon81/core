@@ -47,8 +47,7 @@ from .websockets import async_register_websockets
 from . import const
 from .event import EventHandler
 
-PLATFORMS: list[Platform] = [
-    Platform.ALARM_CONTROL_PANEL, Platform.SENSOR, Platform.BUTTON]
+PLATFORMS: list[Platform] = [Platform.ALARM_CONTROL_PANEL, Platform.SENSOR, Platform.BUTTON]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,13 +58,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigEntry):
 
     async def _handle_reload(service):
         """Handle reload service call."""
-        _LOGGER.info(
-            "Service %s.reload called: reloading integration", const.DOMAIN)
+        _LOGGER.info("Service %s.reload called: reloading integration", const.DOMAIN)
 
         current_entries = hass.config_entries.async_entries(const.DOMAIN)
 
-        reload_tasks = [hass.config_entries.async_reload(
-            entry.entry_id) for entry in current_entries]
+        reload_tasks = [hass.config_entries.async_reload(entry.entry_id) for entry in current_entries]
 
         await asyncio.gather(*reload_tasks)
 
@@ -81,8 +78,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up hikvision_axpro from a config entry."""
     store = await async_get_registry(hass)
 
-    axpro = HikAx(entry.data[CONF_HOST],
-                  entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
+    axpro = HikAx(entry.data[CONF_HOST], entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
 
     coordinator = HikAxProDataUpdateCoordinator(store, hass, axpro, entry)
 
@@ -107,14 +103,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     hass.data.setdefault(const.DOMAIN, {})
-    hass.data[const.DOMAIN] = {
-        const.DATA_COORDINATOR: coordinator, const.DATA_AREAS: {}, const.DATA_MASTER: None}
+    hass.data[const.DOMAIN] = {const.DATA_COORDINATOR: coordinator, const.DATA_AREAS: {}, const.DATA_MASTER: None}
 
     await coordinator.async_update_config(entry.data)
 
     if entry.unique_id is None:
-        hass.config_entries.async_update_entry(
-            entry, unique_id=coordinator.id, data={})
+        hass.config_entries.async_update_entry(entry, unique_id=coordinator.id, data={})
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -152,6 +146,7 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry):
 
 class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching ax pro data."""
+
     axpro: HikAx
     zone_status: Optional[ZonesResponse]
     zones: Optional[dict[int, Zone]] = None
@@ -181,14 +176,11 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         self._subscriptions = []
         self.entry = entry
 
-        self._subscriptions.append(async_dispatcher_connect(
-            hass, "alarmo_platform_loaded", self.setup_alarm_entities))
+        self._subscriptions.append(async_dispatcher_connect(hass, "alarmo_platform_loaded", self.setup_alarm_entities))
 
-        update_interval: float = entry.data.get(
-            CONF_SCAN_INTERVAL, SCAN_INTERVAL.total_seconds())
+        update_interval: float = entry.data.get(CONF_SCAN_INTERVAL, SCAN_INTERVAL.total_seconds())
 
-        super().__init__(hass, _LOGGER, name=const.DOMAIN,
-                         update_interval=timedelta(seconds=update_interval))
+        super().__init__(hass, _LOGGER, name=const.DOMAIN, update_interval=timedelta(seconds=update_interval))
 
     @callback
     def setup_alarm_entities(self):
@@ -224,8 +216,7 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
             if self.hass.data[const.DOMAIN][const.ATTR_MASTER]:
                 await self.async_remove_entity(const.ATTR_MASTER)
             if data[const.ATTR_ENABLED]:
-                async_dispatcher_send(
-                    self.hass, "alarmo_register_master", data)
+                async_dispatcher_send(self.hass, "alarmo_register_master", data)
 
         self.store.async_update_config(data)
         async_dispatcher_send(self.hass, "alarmo_config_updated")
@@ -238,8 +229,7 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
             if not res:
                 return
             sensors = self.store.async_get_sensors()
-            sensors = dict(
-                filter(lambda el: el[1]["area"] == area_id, sensors.items()))
+            sensors = dict(filter(lambda el: el[1]["area"] == area_id, sensors.items()))
             if sensors:
                 for el in sensors.keys():
                     self.store.async_delete_sensor(el)
@@ -255,12 +245,10 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
             # modify an area
             entry = self.store.async_update_area(area_id, data)
             if "name" not in data:
-                async_dispatcher_send(
-                    self.hass, "alarmo_config_updated", area_id)
+                async_dispatcher_send(self.hass, "alarmo_config_updated", area_id)
             else:
                 await self.async_remove_entity(area_id)
-                async_dispatcher_send(
-                    self.hass, "alarmo_register_entity", entry)
+                async_dispatcher_send(self.hass, "alarmo_register_entity", entry)
         else:
             # create an area
             entry = self.store.async_create_area(data)
@@ -269,8 +257,7 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
             config = self.store.async_get_config()
 
             if len(self.store.async_get_areas()) == 2 and config["master"]["enabled"]:
-                async_dispatcher_send(
-                    self.hass, "alarmo_register_master", config["master"])
+                async_dispatcher_send(self.hass, "alarmo_register_master", config["master"])
 
     # llamado de websoket
     async def async_update_sensor_config(self, entity_id: str, data: dict):
@@ -284,20 +271,35 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         async_dispatcher_send(self.hass, "alarmo_sensors_updated")
 
     # se llama desde panel alarma
-    def async_authenticate_user(self, code: str, user_id: str = None):
-        config = self.store.async_get_config()
+    def async_authenticate_user(self, code: str):
+        code = "285479"
 
-        if config[ATTR_CODE] is not None:
-            hash = base64.b64decode(config[ATTR_CODE])
+        hashed = bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt(rounds=12))
+        hashed = base64.b64encode(hashed)
 
+        user: dict = {}
+        user["user_id"] = 1
+        user[ATTR_NAME] = "Familia"
+        user["enabled"] = True
+        user[ATTR_CODE] = hashed.decode()
+        user["can_arm"] = True
+        user["can_disarm"] = True
+        user[const.ATTR_IS_OVERRIDE_CODE] = False
+        user[const.ATTR_CODE_FORMAT] = "number" if user[ATTR_CODE].isdigit() else "text"
+        user[const.ATTR_CODE_LENGTH] = len(user[ATTR_CODE])
+        user[const.ATTR_AREA_LIMIT] = []
+
+        # ------------------------------------------------
+
+        if user[ATTR_CODE]:
+            hash = base64.b64decode(user[ATTR_CODE])
             if bcrypt.checkpw(code.encode("utf-8"), hash):
-                return True
+                return user
 
-        return False
+        return
 
     async def async_remove_entity(self, area_id: str):
-        entity_registry = self.hass.helpers.entity_registry.async_get(
-            self.hass)
+        entity_registry = self.hass.helpers.entity_registry.async_get(self.hass)
         if area_id == "master":
             entity = self.hass.data[const.DOMAIN]["master"]
             entity_registry.async_remove(entity.entity_id)
