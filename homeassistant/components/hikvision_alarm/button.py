@@ -14,14 +14,10 @@ from homeassistant.const import EntityCategory
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][const.DATA_COORDINATOR]
 
-    async_add_entities(
-        [NanoleafIdentifyButton(coordinator)]
-    )
+    async_add_entities([NanoleafIdentifyButton(coordinator)])
 
 
 class NanoleafIdentifyButton(CoordinatorEntity, ButtonEntity):
@@ -40,9 +36,7 @@ class NanoleafIdentifyButton(CoordinatorEntity, ButtonEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this device."""
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.unique_id)}
-        )
+        return DeviceInfo(identifiers={(const.DOMAIN, self.unique_id)})
 
     @property
     def unique_id(self):

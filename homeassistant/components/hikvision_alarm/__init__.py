@@ -8,11 +8,7 @@ from datetime import timedelta
 from typing import Optional
 from collections.abc import Callable
 from homeassistant.core import callback
-from homeassistant.components.alarm_control_panel import (
-    CodeFormat,
-    ATTR_CODE_ARM_REQUIRED,
-    SCAN_INTERVAL
-)
+from homeassistant.components.alarm_control_panel import CodeFormat, ATTR_CODE_ARM_REQUIRED, SCAN_INTERVAL
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .hikax import HikAx
 from async_timeout import timeout
@@ -33,7 +29,8 @@ from homeassistant.const import (
     STATE_ALARM_ARMED_VACATION,
     STATE_ALARM_ARMED_AWAY,
     STATE_ALARM_DISARMED,
-    STATE_ALARM_TRIGGERED, SERVICE_RELOAD
+    STATE_ALARM_TRIGGERED,
+    SERVICE_RELOAD,
 )
 
 from homeassistant.helpers.dispatcher import (
@@ -67,10 +64,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigEntry):
 
         current_entries = hass.config_entries.async_entries(const.DOMAIN)
 
-        reload_tasks = [
-            hass.config_entries.async_reload(entry.entry_id)
-            for entry in current_entries
-        ]
+        reload_tasks = [hass.config_entries.async_reload(
+            entry.entry_id) for entry in current_entries]
 
         await asyncio.gather(*reload_tasks)
 
@@ -86,23 +81,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up hikvision_axpro from a config entry."""
     store = await async_get_registry(hass)
 
-    host = entry.data[CONF_HOST]
-    username = entry.data[CONF_USERNAME]
-    password = entry.data[CONF_PASSWORD]
+    axpro = HikAx(entry.data[CONF_HOST],
+                  entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
 
-    axpro = HikAx(host, username, password)
-
-    if entry.data.get(const.CONF_ENABLE_DEBUG_OUTPUT):
-        _LOGGER.setLevel(logging.DEBUG)
-    else:
-        _LOGGER.setLevel(logging.NOTSET)
-
-    coordinator = HikAxProDataUpdateCoordinator(
-        store,
-        hass,
-        axpro,
-        entry
-    )
+    coordinator = HikAxProDataUpdateCoordinator(store, hass, axpro, entry)
 
     _LOGGER.debug("Antes del init device y 10seg timeout")
 
@@ -113,8 +95,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady from ex
 
     _LOGGER.debug("Despues del init device, y ahora registramos el device")
-    _LOGGER.debug("entry.entry_id: %s", entry.entry_id)
-    _LOGGER.debug("coordinator.id: %s", coordinator.id)
 
     device_registry = dr.async_get(hass)
     device_registry.async_get_or_create(
@@ -128,10 +108,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(const.DOMAIN, {})
     hass.data[const.DOMAIN] = {
-        const.DATA_COORDINATOR: coordinator,
-        const.DATA_AREAS: {},
-        const.DATA_MASTER: None
-    }
+        const.DATA_COORDINATOR: coordinator, const.DATA_AREAS: {}, const.DATA_MASTER: None}
 
     await coordinator.async_update_config(entry.data)
 
@@ -155,7 +132,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not unload_ok:
         return False
 
-    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN]["coordinator"]
+    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][const.DATA_COORDINATOR]
     await coordinator.async_unload()
 
     return True
@@ -163,7 +140,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_remove_entry(hass, entry):
     """Remove Alarmo config entry."""
-    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN]["coordinator"]
+    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][const.DATA_COORDINATOR]
     await coordinator.async_delete_config()
     del hass.data[const.DOMAIN]
 
@@ -191,13 +168,8 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
     hass: HomeAssistant
     entry: ConfigEntry
 
-    def __init__(
-        self,
-        store,
-        hass,
-        axpro: HikAx,
-        entry: ConfigEntry
-    ):
+    def __init__(self, store, hass, axpro: HikAx, entry: ConfigEntry):
+        _LOGGER.debug("__init__ HikAxProDataUpdateCoordinator")
         self.hass = hass
         self.store = store
         self.axpro = axpro
@@ -209,13 +181,8 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         self._subscriptions = []
         self.entry = entry
 
-        _LOGGER.debug("entry.data: %s", self.entry.data)
-
-        self._subscriptions.append(
-            async_dispatcher_connect(
-                hass, "alarmo_platform_loaded", self.setup_alarm_entities
-            )
-        )
+        self._subscriptions.append(async_dispatcher_connect(
+            hass, "alarmo_platform_loaded", self.setup_alarm_entities))
 
         update_interval: float = entry.data.get(
             CONF_SCAN_INTERVAL, SCAN_INTERVAL.total_seconds())
@@ -239,11 +206,15 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
             async_dispatcher_send(self.hass, "alarmo_register_entity", item)
 
         if len(areas) > 1 and config[const.ATTR_ENABLED]:
-            async_dispatcher_send(
-                self.hass, "alarmo_register_master", config)
+            async_dispatcher_send(self.hass, "alarmo_register_master", config)
 
     # llamado de websoket
     async def async_update_config(self, data: dict):
+        if data.get(const.CONF_ENABLE_DEBUG_OUTPUT):
+            _LOGGER.setLevel(logging.DEBUG)
+        else:
+            _LOGGER.setLevel(logging.NOTSET)
+
         old_config = self.store.async_get_config()
 
         _LOGGER.debug("old_config: %s", old_config)
@@ -357,7 +328,7 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         """wipe alarmo storage"""
         await self.store.async_delete()
 
-# ------------------------------------------------
+    # ------------------------------------------------
 
     def init_device(self):
         self.axpro.connect()
@@ -370,11 +341,11 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         device_info = self.axpro.get_device_info()
 
         if device_info is not None:
-            self.id = device_info['DeviceInfo']['macAddress']
-            self.device_name = device_info['DeviceInfo']['deviceName']
-            self.device_model = device_info['DeviceInfo']['model']
-            self.firmware_version = device_info['DeviceInfo']['firmwareVersion']
-            self.firmware_released_date = device_info['DeviceInfo']['firmwareReleasedDate']
+            self.id = device_info["DeviceInfo"]["macAddress"]
+            self.device_name = device_info["DeviceInfo"]["deviceName"]
+            self.device_model = device_info["DeviceInfo"]["model"]
+            self.firmware_version = device_info["DeviceInfo"]["firmwareVersion"]
+            self.firmware_released_date = device_info["DeviceInfo"]["firmwareReleasedDate"]
 
     def load_zones(self):
         devices = ZonesConf.from_dict(self.axpro.load_devices())

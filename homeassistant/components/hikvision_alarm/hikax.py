@@ -6,7 +6,7 @@ import requests
 
 from typing import Optional, Any
 from .const import Endpoints, Method
-from .errors import errors
+from . import errors
 from datetime import datetime
 
 
@@ -30,7 +30,7 @@ class HikAx:
         self.host = host
         self.username = username
         self.password = password
-        self.cookie = ''
+        self.cookie = ""
         self.is_connected = False
 
     def serialize_object(self, username, encoded_password, session_id, session_id_version):
@@ -47,8 +47,7 @@ class HikAx:
         q_user = urllib.parse.quote(self.username)
         q_password = urllib.parse.quote(self.password)
 
-        response = requests.get(
-            f"http://{q_user}:{q_password}@{self.host}{Endpoints.Session_Capabilities}{q_user}")
+        response = requests.get(f"http://{q_user}:{q_password}@{self.host}{Endpoints.Session_Capabilities}{q_user}")
 
         _LOGGER.debug("Session_Capabilities response")
         _LOGGER.debug("Status: %s", response.status_code)
@@ -62,13 +61,12 @@ class HikAx:
                 xml = xmltodict.parse(response.text)
 
                 return SessionLoginCap(
-                    session_id=xml['SessionLoginCap']['sessionID'],
-                    challenge=xml['SessionLoginCap']['challenge'],
-                    iterations=int(xml['SessionLoginCap']['iterations']),
-                    is_irreversible=bool(
-                        xml['SessionLoginCap']['isIrreversible']),
-                    session_id_version=xml['SessionLoginCap']['sessionIDVersion'],
-                    salt=xml['SessionLoginCap']['salt']
+                    session_id=xml["SessionLoginCap"]["sessionID"],
+                    challenge=xml["SessionLoginCap"]["challenge"],
+                    iterations=int(xml["SessionLoginCap"]["iterations"]),
+                    is_irreversible=bool(xml["SessionLoginCap"]["isIrreversible"]),
+                    session_id_version=xml["SessionLoginCap"]["sessionIDVersion"],
+                    salt=xml["SessionLoginCap"]["salt"],
                 )
             except:
                 raise errors.IncorrectResponseContentError()
@@ -77,14 +75,11 @@ class HikAx:
 
     def encode_password(self, session_cap: SessionLoginCap):
         if session_cap.is_irreversible:
-            result = hashlib.sha256(str(
-                f"{self.username}{session_cap.salt}{self.password}").encode("utf-8")).hexdigest()
-            result = hashlib.sha256(
-                str(f"{result}{session_cap.challenge}").encode("utf-8")).hexdigest()
+            result = hashlib.sha256(str(f"{self.username}{session_cap.salt}{self.password}").encode("utf-8")).hexdigest()
+            result = hashlib.sha256(str(f"{result}{session_cap.challenge}").encode("utf-8")).hexdigest()
 
             for i in range(2, session_cap.iterations):
-                result = hashlib.sha256(
-                    str(result).encode("utf-8")).hexdigest()
+                result = hashlib.sha256(str(result).encode("utf-8")).hexdigest()
         else:
             result = None
         return result
@@ -93,16 +88,10 @@ class HikAx:
         params = self.get_session_params()
 
         if params is None:
-            _LOGGER.error(
-                "Respuesta no esperada al pedir parametros de sesion")
+            _LOGGER.error("Respuesta no esperada al pedir parametros de sesion")
             return False
 
-        xml = self.serialize_object(
-            self.username,
-            self.encode_password(params),
-            params.session_id,
-            params.session_id_version
-        )
+        xml = self.serialize_object(self.username, self.encode_password(params), params.session_id, params.session_id_version)
 
         _LOGGER.debug("xml: %s", xml)
 
@@ -114,8 +103,7 @@ class HikAx:
         result = False
 
         try:
-            login_response: requests.Response = requests.post(
-                session_login_url, xml)
+            login_response: requests.Response = requests.post(session_login_url, xml)
 
             _LOGGER.debug("Connect response")
             _LOGGER.debug("Status: %s", login_response.status_code)
@@ -129,7 +117,7 @@ class HikAx:
 
                 if cookie is None:
                     xml = xmltodict.parse(login_response.text)
-                    session_id = xml['SessionLogin']['sessionID'],
+                    session_id = (xml["SessionLogin"]["sessionID"],)
 
                     if session_id is not None:
                         cookie = "WebSession=" + session_id
@@ -163,21 +151,17 @@ class HikAx:
                 response = requests.get(endpoint, headers=headers)
             elif method == Method.POST:
                 if is_json:
-                    response = requests.post(
-                        endpoint, json=data, headers=headers)
+                    response = requests.post(endpoint, json=data, headers=headers)
                 else:
-                    response = requests.post(
-                        endpoint, data=data, headers=headers)
+                    response = requests.post(endpoint, data=data, headers=headers)
             elif method == Method.PUT:
                 if is_json:
                     # _LOGGER.debug("put DISARM")
                     # _LOGGER.debug("endpoint %s", endpoint)
 
-                    response = requests.put(
-                        endpoint, json=data, headers=headers)
+                    response = requests.put(endpoint, json=data, headers=headers)
                 else:
-                    response = requests.put(
-                        endpoint, data=data, headers=headers)
+                    response = requests.put(endpoint, data=data, headers=headers)
             else:
                 return None
 
@@ -192,8 +176,7 @@ class HikAx:
         # _LOGGER.debug("RESPONSE _base_request %s", response)
 
         if response.status_code != 200:
-            raise errors.UnexpectedResponseCodeError(
-                response.status_code, response.text)
+            raise errors.UnexpectedResponseCodeError(response.status_code, response.text)
         if response.status_code == 200:
             if is_json:
                 return response.json()
@@ -202,8 +185,7 @@ class HikAx:
 
     def arm_home(self, sub_id: Optional[int] = None):
         sid = "0xffffffff" if sub_id is None else str(sub_id)
-        response = self._base_request(
-            f"http://{self.host}{Endpoints.Alarm_ArmHome.replace('{}', sid)}", Method.PUT)
+        response = self._base_request(f"http://{self.host}{Endpoints.Alarm_ArmHome.replace('{}', sid)}", Method.PUT)
 
         # _LOGGER.debug("response = %s", response)
 
@@ -211,8 +193,7 @@ class HikAx:
 
     def arm_away(self, sub_id: Optional[int] = None):
         sid = "0xffffffff" if sub_id is None else str(sub_id)
-        response = self._base_request(
-            f"http://{self.host}{Endpoints.Alarm_ArmAway.replace('{}', sid)}", Method.PUT)
+        response = self._base_request(f"http://{self.host}{Endpoints.Alarm_ArmAway.replace('{}', sid)}", Method.PUT)
 
         # _LOGGER.debug("response = %s", response)
 
@@ -223,10 +204,9 @@ class HikAx:
 
         sid = "0xffffffff" if sub_id is None else str(sub_id)
 
-        url = Endpoints.Alarm_Disarm.replace('{}', sid)
+        url = Endpoints.Alarm_Disarm.replace("{}", sid)
 
-        response = self._base_request(
-            f"http://{self.host}{url}", Method.PUT)
+        response = self._base_request(f"http://{self.host}{url}", Method.PUT)
 
         # _LOGGER.debug("response disarm = %s", response)
 
@@ -250,8 +230,7 @@ class HikAx:
     def get_area_arm_status(self, area_id):
         data = {"SubSysList": [{"SubSys": {"id": area_id}}]}
 
-        response = self._base_request(
-            f"http://{self.host}{Endpoints.AreaArmStatus}", Method.POST, data)
+        response = self._base_request(f"http://{self.host}{Endpoints.AreaArmStatus}", Method.POST, data)
 
         return response["ArmStatusList"][0]["ArmStatus"]["status"]
 
@@ -268,8 +247,7 @@ class HikAx:
         return self._base_request(f"http://{self.host}{Endpoints.RepeaterStatus}")
 
     def get_device_info(self):
-        response = self._base_request(
-            f"http://{self.host}{Endpoints.DeviceInfo}", is_json=False)
+        response = self._base_request(f"http://{self.host}{Endpoints.DeviceInfo}", is_json=False)
 
         return xmltodict.parse(response)
 
@@ -279,6 +257,5 @@ class HikAx:
     def check_arm(self, area_id):
         data = {"SubSysList": [{"SubSys": {"id": area_id}}]}
 
-        response = self._base_request(
-            f"http://{self.host}{Endpoints.systemFault}", Method.POST, data)
+        response = self._base_request(f"http://{self.host}{Endpoints.systemFault}", Method.POST, data)
         return response["ArmFault"]["status"]

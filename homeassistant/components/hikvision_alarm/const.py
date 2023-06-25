@@ -105,7 +105,7 @@ ARM_MODE_TO_STATE = {
     "home": STATE_ALARM_ARMED_HOME,
     "night": STATE_ALARM_ARMED_NIGHT,
     "custom": STATE_ALARM_ARMED_CUSTOM_BYPASS,
-    "vacation": STATE_ALARM_ARMED_VACATION
+    "vacation": STATE_ALARM_ARMED_VACATION,
 }
 
 MODES_TO_SUPPORTED_FEATURES = {
@@ -113,45 +113,35 @@ MODES_TO_SUPPORTED_FEATURES = {
     STATE_ALARM_ARMED_HOME: AlarmControlPanelEntityFeature.ARM_HOME,
     STATE_ALARM_ARMED_NIGHT: AlarmControlPanelEntityFeature.ARM_NIGHT,
     STATE_ALARM_ARMED_CUSTOM_BYPASS: AlarmControlPanelEntityFeature.ARM_CUSTOM_BYPASS,
-    STATE_ALARM_ARMED_VACATION: AlarmControlPanelEntityFeature.ARM_VACATION
+    STATE_ALARM_ARMED_VACATION: AlarmControlPanelEntityFeature.ARM_VACATION,
 }
 
 ATTR_IS_OVERRIDE_CODE = "is_override_code"
 
-ARM_MODES = [
-    STATE_ALARM_ARMED_AWAY,
-    STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_ARMED_NIGHT,
-    STATE_ALARM_ARMED_CUSTOM_BYPASS,
-    STATE_ALARM_ARMED_VACATION
-]
+ARM_MODES = [STATE_ALARM_ARMED_AWAY, STATE_ALARM_ARMED_HOME, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_CUSTOM_BYPASS, STATE_ALARM_ARMED_VACATION]
 
 SERVICE_ARM_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
         vol.Optional(CONF_CODE, default=""): cv.string,
-        vol.Optional(CONF_MODE, default=STATE_ALARM_ARMED_AWAY): vol.In([
-            "away",
-            "home",
-            "night",
-            "custom",
-            "vacation",
-            STATE_ALARM_ARMED_AWAY,
-            STATE_ALARM_ARMED_HOME,
-            STATE_ALARM_ARMED_NIGHT,
-            STATE_ALARM_ARMED_CUSTOM_BYPASS,
-            STATE_ALARM_ARMED_VACATION,
-        ]),
+        vol.Optional(CONF_MODE, default=STATE_ALARM_ARMED_AWAY): vol.In(
+            [
+                "away",
+                "home",
+                "night",
+                "custom",
+                "vacation",
+                STATE_ALARM_ARMED_AWAY,
+                STATE_ALARM_ARMED_HOME,
+                STATE_ALARM_ARMED_NIGHT,
+                STATE_ALARM_ARMED_CUSTOM_BYPASS,
+                STATE_ALARM_ARMED_VACATION,
+            ]
+        ),
         vol.Optional(ATTR_SKIP_DELAY, default=False): cv.boolean,
         vol.Optional(ATTR_FORCE, default=False): cv.boolean,
-        vol.Optional(ATTR_CONTEXT_ID): int
+        vol.Optional(ATTR_CONTEXT_ID): int,
     }
 )
 
-SERVICE_DISARM_SCHEMA = vol.Schema(
-    {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-        vol.Optional(CONF_CODE, default=""): cv.string,
-        vol.Optional(ATTR_CONTEXT_ID): int
-    }
-)
+SERVICE_DISARM_SCHEMA = vol.Schema({vol.Required(ATTR_ENTITY_ID): cv.entity_id, vol.Optional(CONF_CODE, default=""): cv.string, vol.Optional(ATTR_CONTEXT_ID): int})

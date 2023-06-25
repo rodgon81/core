@@ -16,10 +16,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass, STATE_ON, STATE_OFF
 from homeassistant.components.sensor import SensorEntity, DOMAIN as SENSOR_DOMAIN, SensorEntityDescription, SensorDeviceClass, SensorStateClass
 from homeassistant.helpers import device_registry as dr
-
 from homeassistant.helpers.typing import StateType
-
-
 from . import HikAxProDataUpdateCoordinator
 from .const import DATA_COORDINATOR, DOMAIN
 from .model import DetectorType, Zone, Status, detector_model_to_name
@@ -27,9 +24,7 @@ from .model import DetectorType, Zone, Status, detector_model_to_name
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up a Hikvision ax pro alarm control panel based on a config entry."""
 
     coordinator: HikAxProDataUpdateCoordinator = hass.data[DOMAIN][DATA_COORDINATOR]
@@ -48,8 +43,7 @@ async def async_setup_entry(
             device_registry.async_get_or_create(
                 config_entry_id=entry.entry_id,
                 # connections={},
-                identifiers={(DOMAIN, str(entry.entry_id) + \
-                              "-" + str(zone_config.id))},
+                identifiers={(DOMAIN, str(entry.entry_id) + "-" + str(zone_config.id))},
                 manufacturer="HikVision" if zone.zone.model is not None else "Unknown",
                 # suggested_area=zone.zone.,
                 name=zone_config.zone_name,
@@ -63,48 +57,33 @@ async def async_setup_entry(
 
             # Specific entity
             if detector_type == DetectorType.WIRELESS_EXTERNAL_MAGNET_DETECTOR:
-                devices.append(HikWirelessExtMagnetDetector(
-                    coordinator, zone.zone, entry.entry_id))
-            if detector_type == DetectorType.DOOR_MAGNETIC_CONTACT_DETECTOR \
-                    or detector_type == DetectorType.SLIM_MAGNETIC_CONTACT \
-                    or detector_type == DetectorType.MAGNET_SHOCK_DETECTOR:
-                devices.append(HikMagneticContactDetector(
-                    coordinator, zone.zone, entry.entry_id))
+                devices.append(HikWirelessExtMagnetDetector(coordinator, zone.zone, entry.entry_id))
+            if detector_type == DetectorType.DOOR_MAGNETIC_CONTACT_DETECTOR or detector_type == DetectorType.SLIM_MAGNETIC_CONTACT or detector_type == DetectorType.MAGNET_SHOCK_DETECTOR:
+                devices.append(HikMagneticContactDetector(coordinator, zone.zone, entry.entry_id))
             if detector_type == DetectorType.WIRELESS_TEMPERATURE_HUMIDITY_DETECTOR:
-                devices.append(HikHumidity(
-                    coordinator, zone.zone, entry.entry_id))
+                devices.append(HikHumidity(coordinator, zone.zone, entry.entry_id))
 
             # Generic Attrs
             if zone.zone.temperature is not None:
-                devices.append(HikTemperature(
-                    coordinator, zone.zone, entry.entry_id))
+                devices.append(HikTemperature(coordinator, zone.zone, entry.entry_id))
             if zone.zone.charge_value is not None:
-                devices.append(HikBatteryInfo(
-                    coordinator, zone.zone, entry.entry_id))
+                devices.append(HikBatteryInfo(coordinator, zone.zone, entry.entry_id))
             if zone.zone.signal is not None:
-                devices.append(HikSignalInfo(
-                    coordinator, zone.zone, entry.entry_id))
+                devices.append(HikSignalInfo(coordinator, zone.zone, entry.entry_id))
             if zone.zone.tamper_evident is not None:
-                devices.append(HikTamperDetection(
-                    coordinator, zone.zone, entry.entry_id))
+                devices.append(HikTamperDetection(coordinator, zone.zone, entry.entry_id))
             if zone.zone.bypassed is not None:
-                devices.append(HikBypassDetection(
-                    coordinator, zone.zone, entry.entry_id))
+                devices.append(HikBypassDetection(coordinator, zone.zone, entry.entry_id))
             if zone.zone.armed is not None:
-                devices.append(HikArmedInfo(
-                    coordinator, zone.zone, entry.entry_id))
+                devices.append(HikArmedInfo(coordinator, zone.zone, entry.entry_id))
             if zone.zone.alarm is not None:
-                devices.append(HikAlarmInfo(
-                    coordinator, zone.zone, entry.entry_id))
+                devices.append(HikAlarmInfo(coordinator, zone.zone, entry.entry_id))
             if zone.zone.stay_away is not None:
-                devices.append(HikStayAwayInfo(
-                    coordinator, zone.zone, entry.entry_id))
+                devices.append(HikStayAwayInfo(coordinator, zone.zone, entry.entry_id))
             if zone.zone.is_via_repeater is not None:
-                devices.append(HikIsViaRepeaterInfo(
-                    coordinator, zone.zone, entry.entry_id))
+                devices.append(HikIsViaRepeaterInfo(coordinator, zone.zone, entry.entry_id))
             if zone.zone.status is not None:
-                devices.append(HikStatusInfo(
-                    coordinator, zone.zone, entry.entry_id))
+                devices.append(HikStatusInfo(coordinator, zone.zone, entry.entry_id))
 
     # _LOGGER.debug("devices: %s", devices)
     async_add_entities(devices, False)
@@ -118,8 +97,7 @@ class HikDevice:
     def device_info(self) -> DeviceInfo:
         """Return the device info."""
         return DeviceInfo(
-            identifiers={(DOMAIN, str(self._ref_id) +
-                          "-" + str(self.zone.id))},
+            identifiers={(DOMAIN, str(self._ref_id) + "-" + str(self.zone.id))},
             manufacturer="HikVision" if self.zone.model is not None else "Unknown",
             # suggested_area=zone.zone.,
             name=self.zone.name,
@@ -130,6 +108,7 @@ class HikDevice:
 
 class HikWirelessExtMagnetDetector(CoordinatorEntity, HikDevice, BinarySensorEntity):
     """Representation of Hikvision external magnet detector."""
+
     coordinator: HikAxProDataUpdateCoordinator
 
     def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entry_id: str) -> None:
@@ -179,6 +158,7 @@ class HikWirelessExtMagnetDetector(CoordinatorEntity, HikDevice, BinarySensorEnt
 
 class HikMagneticContactDetector(CoordinatorEntity, HikDevice, BinarySensorEntity):
     """Representation of Hikvision external magnet detector."""
+
     coordinator: HikAxProDataUpdateCoordinator
 
     def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entry_id: str) -> None:
@@ -226,6 +206,7 @@ class HikMagneticContactDetector(CoordinatorEntity, HikDevice, BinarySensorEntit
 
 class HikTemperature(CoordinatorEntity, HikDevice, SensorEntity):
     """Representation of Hikvision external magnet detector."""
+
     coordinator: HikAxProDataUpdateCoordinator
 
     def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entry_id: str) -> None:
@@ -267,6 +248,7 @@ class HikTemperature(CoordinatorEntity, HikDevice, SensorEntity):
 
 class HikHumidity(CoordinatorEntity, HikDevice, SensorEntity):
     """Representation of Hikvision external magnet detector."""
+
     coordinator: HikAxProDataUpdateCoordinator
 
     def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entry_id: str) -> None:
@@ -308,6 +290,7 @@ class HikHumidity(CoordinatorEntity, HikDevice, SensorEntity):
 
 class HikBatteryInfo(CoordinatorEntity, HikDevice, SensorEntity):
     """Representation of Hikvision battery status."""
+
     coordinator: HikAxProDataUpdateCoordinator
 
     def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entry_id: str) -> None:
@@ -350,6 +333,7 @@ class HikBatteryInfo(CoordinatorEntity, HikDevice, SensorEntity):
 
 class HikSignalInfo(CoordinatorEntity, HikDevice, SensorEntity):
     """Representation of Hikvision signal status."""
+
     coordinator: HikAxProDataUpdateCoordinator
 
     def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entry_id: str) -> None:
@@ -392,6 +376,7 @@ class HikSignalInfo(CoordinatorEntity, HikDevice, SensorEntity):
 
 class HikStatusInfo(CoordinatorEntity, HikDevice, SensorEntity):
     """Representation of Hikvision signal status."""
+
     coordinator: HikAxProDataUpdateCoordinator
 
     def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entry_id: str) -> None:
@@ -402,8 +387,7 @@ class HikStatusInfo(CoordinatorEntity, HikDevice, SensorEntity):
         self._attr_unique_id = f"{self.coordinator.device_name}-status-{zone.id}"
         self._attr_has_entity_name = True
         self.entity_id = f"{SENSOR_DOMAIN}.{coordinator.device_name}-status-{zone.id}"
-        if self.coordinator.zones and self.coordinator.zones[self.zone.id]\
-                and self.coordinator.zones[self.zone.id].status is not None:
+        if self.coordinator.zones and self.coordinator.zones[self.zone.id] and self.coordinator.zones[self.zone.id].status is not None:
             self._attr_native_value = self.coordinator.zones[self.zone.id].status.value
 
     @property
@@ -431,8 +415,7 @@ class HikStatusInfo(CoordinatorEntity, HikDevice, SensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        if self.coordinator.zones and self.coordinator.zones[self.zone.id]\
-                and self.coordinator.zones[self.zone.id].status is not None:
+        if self.coordinator.zones and self.coordinator.zones[self.zone.id] and self.coordinator.zones[self.zone.id].status is not None:
             self._attr_native_value = self.coordinator.zones[self.zone.id].status.value
         else:
             self._attr_native_value = None
@@ -441,6 +424,7 @@ class HikStatusInfo(CoordinatorEntity, HikDevice, SensorEntity):
 
 class HikTamperDetection(CoordinatorEntity, HikDevice, BinarySensorEntity):
     """Representation of Hikvision tamper detection."""
+
     coordinator: HikAxProDataUpdateCoordinator
 
     def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entry_id: str) -> None:
@@ -480,6 +464,7 @@ class HikTamperDetection(CoordinatorEntity, HikDevice, BinarySensorEntity):
 
 class HikBypassDetection(CoordinatorEntity, HikDevice, BinarySensorEntity):
     """Representation of Hikvision bypass detection."""
+
     coordinator: HikAxProDataUpdateCoordinator
 
     def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entry_id: str) -> None:
@@ -519,6 +504,7 @@ class HikBypassDetection(CoordinatorEntity, HikDevice, BinarySensorEntity):
 
 class HikArmedInfo(CoordinatorEntity, HikDevice, BinarySensorEntity):
     """Representation of Hikvision armed status."""
+
     coordinator: HikAxProDataUpdateCoordinator
 
     def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entry_id: str) -> None:
@@ -558,6 +544,7 @@ class HikArmedInfo(CoordinatorEntity, HikDevice, BinarySensorEntity):
 
 class HikAlarmInfo(CoordinatorEntity, HikDevice, BinarySensorEntity):
     """Representation of Hikvision alarm status."""
+
     coordinator: HikAxProDataUpdateCoordinator
 
     def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entry_id: str) -> None:
@@ -597,6 +584,7 @@ class HikAlarmInfo(CoordinatorEntity, HikDevice, BinarySensorEntity):
 
 class HikStayAwayInfo(CoordinatorEntity, HikDevice, BinarySensorEntity):
     """Representation of Hikvision Stay away status."""
+
     coordinator: HikAxProDataUpdateCoordinator
 
     def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entry_id: str) -> None:
@@ -636,6 +624,7 @@ class HikStayAwayInfo(CoordinatorEntity, HikDevice, BinarySensorEntity):
 
 class HikIsViaRepeaterInfo(CoordinatorEntity, HikDevice, BinarySensorEntity):
     """Representation of Hikvision is via repeater status."""
+
     coordinator: HikAxProDataUpdateCoordinator
 
     def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entry_id: str) -> None:

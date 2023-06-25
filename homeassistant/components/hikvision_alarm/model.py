@@ -145,7 +145,7 @@ class InputList:
     mode: str
 
     @staticmethod
-    def from_dict(obj: Any) -> 'InputList':
+    def from_dict(obj: Any) -> "InputList":
         assert isinstance(obj, dict)
         id = from_int(obj.get("id"))
         enabled = from_bool(obj.get("enabled"))
@@ -175,7 +175,8 @@ class ZoneAttrib(Enum):
 
 
 class ZoneType(Enum):
-    """ delay zone """
+    """delay zone"""
+
     DELAY = "Delay"
     """ panic zone """
     EMERGENCY = "Emergency"
@@ -235,54 +236,43 @@ class Zone:
     module_channel: Optional[int] = None
 
     @staticmethod
-    def from_dict(obj: Any) -> 'Zone':
+    def from_dict(obj: Any) -> "Zone":
         assert isinstance(obj, dict)
         id = from_int(obj.get("id"))
         if obj.get("name") is None:
             name = f"Zone ID {id}"
         else:
             name = from_str(obj.get("name"))
-        tamper_evident = from_union(
-            [from_bool, from_none], obj.get("tamperEvident"))
+        tamper_evident = from_union([from_bool, from_none], obj.get("tamperEvident"))
         shielded = from_union([from_bool, from_none], obj.get("shielded"))
         bypassed = from_union([from_bool, from_none], obj.get("bypassed"))
         armed = from_bool(obj.get("armed"))
         is_arming = from_union([from_bool, from_none], obj.get("isArming"))
         alarm = from_union([from_bool, from_none], obj.get("alarm"))
-        sub_system_no = from_union(
-            [from_int, from_none], obj.get("subSystemNo"))
+        sub_system_no = from_union([from_int, from_none], obj.get("subSystemNo"))
 
         try:
-            linkage_sub_system = from_union([lambda x: from_list(
-                from_int, x), from_none], obj.get("linkageSubSystem"))
+            linkage_sub_system = from_union([lambda x: from_list(from_int, x), from_none], obj.get("linkageSubSystem"))
         except:
-            _LOGGER.warning("Invalid zone linkage_sub_system %s",
-                            obj.get("linkage_sub_system"))
+            _LOGGER.warning("Invalid zone linkage_sub_system %s", obj.get("linkage_sub_system"))
             _LOGGER.warning("Zone info: %s", obj)
             linkage_sub_system = None
 
         stay_away = from_union([from_bool, from_none], obj.get("stayAway"))
         device_no = from_union([from_int, from_none], obj.get("deviceNo"))
-        abnormal_or_not = from_union(
-            [from_bool, from_none], obj.get("abnormalOrNot"))
+        abnormal_or_not = from_union([from_bool, from_none], obj.get("abnormalOrNot"))
         charge = from_union([from_str, from_none], obj.get("charge"))
-        charge_value = from_union(
-            [from_int, from_none], obj.get("chargeValue"))
+        charge_value = from_union([from_int, from_none], obj.get("chargeValue"))
         signal = from_union([from_int, from_none], obj.get("signal"))
         temperature = from_union([from_int, from_none], obj.get("temperature"))
         humidity = from_union([from_int, from_none], obj.get("humidity"))
         model = from_union([from_str, from_none], obj.get("model"))
-        is_via_repeater = from_union(
-            [from_bool, from_none], obj.get("isViaRepeater"))
+        is_via_repeater = from_union([from_bool, from_none], obj.get("isViaRepeater"))
         version = from_union([from_str, from_none], obj.get("version"))
-        magnet_open_status = from_union(
-            [from_bool, from_none], obj.get("magnetOpenStatus"))
-        input_list = from_union([lambda x: from_list(
-            InputList.from_dict, x), from_none], obj.get("InputList"))
-        is_support_add_type = from_union(
-            [from_bool, from_none], obj.get("isSupportAddType"))
-        module_channel = from_union(
-            [from_int, from_none], obj.get("moduleChannel"))
+        magnet_open_status = from_union([from_bool, from_none], obj.get("magnetOpenStatus"))
+        input_list = from_union([lambda x: from_list(InputList.from_dict, x), from_none], obj.get("InputList"))
+        is_support_add_type = from_union([from_bool, from_none], obj.get("isSupportAddType"))
+        module_channel = from_union([from_int, from_none], obj.get("moduleChannel"))
 
         try:
             status = Status(obj.get("status"))
@@ -291,11 +281,9 @@ class Zone:
             _LOGGER.warning("Detector info: %s", obj)
             status = None
         try:
-            detector_type = from_union(
-                [DetectorType, from_none], obj.get("detectorType"))
+            detector_type = from_union([DetectorType, from_none], obj.get("detectorType"))
         except:
-            _LOGGER.warning("Invalid detector type %s",
-                            obj.get("detectorType"))
+            _LOGGER.warning("Invalid detector type %s", obj.get("detectorType"))
             _LOGGER.warning("Detector info: %s", obj)
             detector_type = None
         try:
@@ -305,24 +293,49 @@ class Zone:
             _LOGGER.warning("Detector info: %s", obj)
             zone_type = None
         try:
-            zone_attrib = from_union(
-                [ZoneAttrib, from_none], obj.get("zoneAttrib"))
+            zone_attrib = from_union([ZoneAttrib, from_none], obj.get("zoneAttrib"))
         except:
             _LOGGER.warning("Invalid zone attrib %s", obj.get("zoneAttrib"))
             _LOGGER.warning("Detector info: %s", obj)
             zone_attrib = None
         try:
-            access_module_type = from_union(
-                [AccessModuleType, from_none], obj.get("accessModuleType"))
+            access_module_type = from_union([AccessModuleType, from_none], obj.get("accessModuleType"))
         except:
-            _LOGGER.warning("Invalid accessModuleType %s",
-                            obj.get("accessModuleType"))
+            _LOGGER.warning("Invalid accessModuleType %s", obj.get("accessModuleType"))
             _LOGGER.warning("Detector info: %s", obj)
             access_module_type = None
-        return Zone(id, name, status, tamper_evident, shielded, bypassed, armed, is_arming, alarm, sub_system_no,
-                    linkage_sub_system, detector_type, stay_away, zone_type, zone_attrib, device_no, abnormal_or_not,
-                    charge, charge_value, signal, temperature, humidity, model, is_via_repeater, version,
-                    magnet_open_status, input_list, is_support_add_type, access_module_type, module_channel)
+        return Zone(
+            id,
+            name,
+            status,
+            tamper_evident,
+            shielded,
+            bypassed,
+            armed,
+            is_arming,
+            alarm,
+            sub_system_no,
+            linkage_sub_system,
+            detector_type,
+            stay_away,
+            zone_type,
+            zone_attrib,
+            device_no,
+            abnormal_or_not,
+            charge,
+            charge_value,
+            signal,
+            temperature,
+            humidity,
+            model,
+            is_via_repeater,
+            version,
+            magnet_open_status,
+            input_list,
+            is_support_add_type,
+            access_module_type,
+            module_channel,
+        )
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -336,37 +349,27 @@ class Zone:
         result["isArming"] = from_bool(self.is_arming)
         result["alarm"] = from_bool(self.alarm)
         result["subSystemNo"] = from_int(self.sub_system_no)
-        result["linkageSubSystem"] = from_list(
-            from_int, self.linkage_sub_system)
+        result["linkageSubSystem"] = from_list(from_int, self.linkage_sub_system)
         result["detectorType"] = to_enum(DetectorType, self.detector_type)
         result["stayAway"] = from_bool(self.stay_away)
         if self.zone_type is not None:
             result["zoneType"] = to_enum(ZoneType, self.zone_type)
         result["zoneAttrib"] = to_enum(ZoneAttrib, self.zone_attrib)
         result["deviceNo"] = from_int(self.device_no)
-        result["abnormalOrNot"] = from_union(
-            [from_bool, from_none], self.abnormal_or_not)
+        result["abnormalOrNot"] = from_union([from_bool, from_none], self.abnormal_or_not)
         result["charge"] = from_union([from_str, from_none], self.charge)
-        result["chargeValue"] = from_union(
-            [from_int, from_none], self.charge_value)
+        result["chargeValue"] = from_union([from_int, from_none], self.charge_value)
         result["signal"] = from_union([from_int, from_none], self.signal)
-        result["temperature"] = from_union(
-            [from_int, from_none], self.temperature)
+        result["temperature"] = from_union([from_int, from_none], self.temperature)
         result["humidity"] = from_union([from_int, from_none], self.humidity)
         result["model"] = from_union([from_str, from_none], self.model)
-        result["isViaRepeater"] = from_union(
-            [from_bool, from_none], self.is_via_repeater)
+        result["isViaRepeater"] = from_union([from_bool, from_none], self.is_via_repeater)
         result["version"] = from_union([from_str, from_none], self.version)
-        result["magnetOpenStatus"] = from_union(
-            [from_bool, from_none], self.magnet_open_status)
-        result["InputList"] = from_union([lambda x: from_list(lambda x: to_class(InputList, x), x), from_none],
-                                         self.input_list)
-        result["isSupportAddType"] = from_union(
-            [from_bool, from_none], self.is_support_add_type)
-        result["accessModuleType"] = from_union([lambda x: to_enum(AccessModuleType, x), from_none],
-                                                self.access_module_type)
-        result["moduleChannel"] = from_union(
-            [from_int, from_none], self.module_channel)
+        result["magnetOpenStatus"] = from_union([from_bool, from_none], self.magnet_open_status)
+        result["InputList"] = from_union([lambda x: from_list(lambda x: to_class(InputList, x), x), from_none], self.input_list)
+        result["isSupportAddType"] = from_union([from_bool, from_none], self.is_support_add_type)
+        result["accessModuleType"] = from_union([lambda x: to_enum(AccessModuleType, x), from_none], self.access_module_type)
+        result["moduleChannel"] = from_union([from_int, from_none], self.module_channel)
         return result
 
 
@@ -375,7 +378,7 @@ class ZoneList:
     zone: Zone
 
     @staticmethod
-    def from_dict(obj: Any) -> 'ZoneList':
+    def from_dict(obj: Any) -> "ZoneList":
         assert isinstance(obj, dict)
         zone = Zone.from_dict(obj.get("Zone"))
         return ZoneList(zone)
@@ -391,15 +394,14 @@ class ZonesResponse:
     zone_list: List[ZoneList]
 
     @staticmethod
-    def from_dict(obj: Any) -> 'ZonesResponse':
+    def from_dict(obj: Any) -> "ZonesResponse":
         assert isinstance(obj, dict)
         zone_list = from_list(ZoneList.from_dict, obj.get("ZoneList"))
         return ZonesResponse(zone_list)
 
     def to_dict(self) -> dict:
         result: dict = {}
-        result["ZoneList"] = from_list(
-            lambda x: to_class(ZoneList, x), self.zone_list)
+        result["ZoneList"] = from_list(lambda x: to_class(ZoneList, x), self.zone_list)
         return result
 
 
@@ -421,7 +423,7 @@ class SubSys:
     delay_time: int
 
     @staticmethod
-    def from_dict(obj: Any) -> 'SubSys':
+    def from_dict(obj: Any) -> "SubSys":
         assert isinstance(obj, dict)
         id = from_int(obj.get("id"))
         arming = Arming(obj.get("arming"))
@@ -447,7 +449,7 @@ class SubSysList:
     sub_sys: SubSys
 
     @staticmethod
-    def from_dict(obj: Any) -> 'SubSysList':
+    def from_dict(obj: Any) -> "SubSysList":
         assert isinstance(obj, dict)
         sub_sys = SubSys.from_dict(obj.get("SubSys"))
         return SubSysList(sub_sys)
@@ -463,15 +465,14 @@ class SubSystemResponse:
     sub_sys_list: List[SubSysList]
 
     @staticmethod
-    def from_dict(obj: Any) -> 'SubSystemResponse':
+    def from_dict(obj: Any) -> "SubSystemResponse":
         assert isinstance(obj, dict)
         sub_sys_list = from_list(SubSysList.from_dict, obj.get("SubSysList"))
         return SubSystemResponse(sub_sys_list)
 
     def to_dict(self) -> dict:
         result: dict = {}
-        result["SubSysList"] = from_list(
-            lambda x: to_class(SubSysList, x), self.sub_sys_list)
+        result["SubSysList"] = from_list(lambda x: to_class(SubSysList, x), self.sub_sys_list)
         return result
 
 
@@ -504,32 +505,23 @@ class CrossZoneCFG:
     associate_time: int
 
     @staticmethod
-    def from_dict(obj: Any) -> 'CrossZoneCFG':
+    def from_dict(obj: Any) -> "CrossZoneCFG":
         assert isinstance(obj, dict)
         is_associated = from_bool(obj.get("isAssociated"))
-        support_associated_zone = from_list(
-            from_int, obj.get("supportAssociatedZone"))
-        already_associated_zone = from_list(
-            lambda x: x, obj.get("alreadyAssociatedZone"))
-        support_linkage_channel_id = from_list(
-            lambda x: x, obj.get("supportLinkageChannelID"))
-        already_linkage_channel_id = from_list(
-            lambda x: x, obj.get("alreadyLinkageChannelID"))
+        support_associated_zone = from_list(from_int, obj.get("supportAssociatedZone"))
+        already_associated_zone = from_list(lambda x: x, obj.get("alreadyAssociatedZone"))
+        support_linkage_channel_id = from_list(lambda x: x, obj.get("supportLinkageChannelID"))
+        already_linkage_channel_id = from_list(lambda x: x, obj.get("alreadyLinkageChannelID"))
         associate_time = from_int(obj.get("associateTime"))
-        return CrossZoneCFG(is_associated, support_associated_zone, already_associated_zone, support_linkage_channel_id,
-                            already_linkage_channel_id, associate_time)
+        return CrossZoneCFG(is_associated, support_associated_zone, already_associated_zone, support_linkage_channel_id, already_linkage_channel_id, associate_time)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["isAssociated"] = from_bool(self.is_associated)
-        result["supportAssociatedZone"] = from_list(
-            from_int, self.support_associated_zone)
-        result["alreadyAssociatedZone"] = from_list(
-            lambda x: x, self.already_associated_zone)
-        result["supportLinkageChannelID"] = from_list(
-            lambda x: x, self.support_linkage_channel_id)
-        result["alreadyLinkageChannelID"] = from_list(
-            lambda x: x, self.already_linkage_channel_id)
+        result["supportAssociatedZone"] = from_list(from_int, self.support_associated_zone)
+        result["alreadyAssociatedZone"] = from_list(lambda x: x, self.already_associated_zone)
+        result["supportLinkageChannelID"] = from_list(lambda x: x, self.support_linkage_channel_id)
+        result["alreadyLinkageChannelID"] = from_list(lambda x: x, self.already_linkage_channel_id)
         result["associateTime"] = from_int(self.associate_time)
         return result
 
@@ -559,12 +551,11 @@ class RelatedChan:
     relator: Optional[Relator] = None
 
     @staticmethod
-    def from_dict(obj: Any) -> 'RelatedChan':
+    def from_dict(obj: Any) -> "RelatedChan":
         assert isinstance(obj, dict)
         camera_seq = from_str(obj.get("cameraSeq"))
         related_chan = from_int(obj.get("relatedChan"))
-        linkage_camera_name = from_union(
-            [from_str, from_none], obj.get("linkageCameraName"))
+        linkage_camera_name = from_union([from_str, from_none], obj.get("linkageCameraName"))
         try:
             relator = from_union([Relator, from_none], obj.get("relator"))
         except:
@@ -578,11 +569,9 @@ class RelatedChan:
         result["cameraSeq"] = from_str(self.camera_seq)
         result["relatedChan"] = from_int(self.related_chan)
         if self.linkage_camera_name is not None:
-            result["linkageCameraName"] = from_union(
-                [from_str, from_none], self.linkage_camera_name)
+            result["linkageCameraName"] = from_union([from_str, from_none], self.linkage_camera_name)
         if self.relator is not None:
-            result["relator"] = from_union(
-                [lambda x: to_enum(Relator, x), from_none], self.relator)
+            result["relator"] = from_union([lambda x: to_enum(Relator, x), from_none], self.relator)
         return result
 
 
@@ -591,7 +580,7 @@ class RelatedChanList:
     related_chan: RelatedChan
 
     @staticmethod
-    def from_dict(obj: Any) -> 'RelatedChanList':
+    def from_dict(obj: Any) -> "RelatedChanList":
         assert isinstance(obj, dict)
         related_chan = RelatedChan.from_dict(obj.get("RelatedChan"))
         return RelatedChanList(related_chan)
@@ -609,18 +598,16 @@ class RelatedPIRCAM:
     linkage_pircam_name: str
 
     @staticmethod
-    def from_dict(obj: Any) -> 'RelatedPIRCAM':
+    def from_dict(obj: Any) -> "RelatedPIRCAM":
         assert isinstance(obj, dict)
-        support_linkage_zones = from_list(
-            lambda x: x, obj.get("supportLinkageZones"))
+        support_linkage_zones = from_list(lambda x: x, obj.get("supportLinkageZones"))
         linkage_zone = from_list(lambda x: x, obj.get("linkageZone"))
         linkage_pircam_name = from_str(obj.get("linkagePIRCAMName"))
         return RelatedPIRCAM(support_linkage_zones, linkage_zone, linkage_pircam_name)
 
     def to_dict(self) -> dict:
         result: dict = {}
-        result["supportLinkageZones"] = from_list(
-            lambda x: x, self.support_linkage_zones)
+        result["supportLinkageZones"] = from_list(lambda x: x, self.support_linkage_zones)
         result["linkageZone"] = from_list(lambda x: x, self.linkage_zone)
         result["linkagePIRCAMName"] = from_str(self.linkage_pircam_name)
         return result
@@ -685,7 +672,7 @@ class ZoneConfig:
     check_time: Optional[int] = None
 
     @staticmethod
-    def from_dict(obj: Any) -> 'ZoneConfig':
+    def from_dict(obj: Any) -> "ZoneConfig":
         assert isinstance(obj, dict)
         id = from_int(obj.get("id"))
         zone_name = from_str(obj.get("zoneName"))
@@ -706,19 +693,15 @@ class ZoneConfig:
             chime_enabled = False
 
         silent_enabled = from_bool(obj.get("silentEnabled"))
-        chime_warning_type = from_union(
-            [ChimeWarningType, from_none], obj.get("chimeWarningType"))
+        chime_warning_type = from_union([ChimeWarningType, from_none], obj.get("chimeWarningType"))
         timeout_type = TimeoutType(obj.get("timeoutType"))
         timeout = from_int(obj.get("timeout"))
-        relate_detector = from_union(
-            [from_bool, from_none], obj.get("relateDetector"))
-        related_chan_list = from_list(
-            RelatedChanList.from_dict, obj.get("RelatedChanList"))
+        relate_detector = from_union([from_bool, from_none], obj.get("relateDetector"))
+        related_chan_list = from_list(RelatedChanList.from_dict, obj.get("RelatedChanList"))
         double_knock_enabled = from_bool(obj.get("doubleKnockEnabled"))
         double_knock_time = from_int(obj.get("doubleKnockTime"))
         try:
-            new_key_zone_trigger_type_cfg = NewKeyZoneTriggerTypeCFG(
-                obj.get("newKeyZoneTriggerTypeCfg"))
+            new_key_zone_trigger_type_cfg = NewKeyZoneTriggerTypeCFG(obj.get("newKeyZoneTriggerTypeCfg"))
         except:
             # _LOGGER.warning("Invalid newKeyZoneTriggerTypeCfg")
             new_key_zone_trigger_type_cfg = NewKeyZoneTriggerTypeCFG.ZONE_STATUS
@@ -729,70 +712,84 @@ class ZoneConfig:
             # _LOGGER.warning("Invalid newKeyZoneTriggerTypeCfg")
             zone_status_cfg = ZoneStatusCFG.TRIGGER_ARM
 
-        sub_system_no = from_union(
-            [from_int, from_none], obj.get("subSystemNo"))
-        linkage_sub_system = from_union([lambda x: from_list(
-            from_int, x), from_none], obj.get("linkageSubSystem"))
-        support_linkage_sub_system_list = from_union([lambda x: from_list(from_int, x), from_none],
-                                                     obj.get("supportLinkageSubSystemList"))
+        sub_system_no = from_union([from_int, from_none], obj.get("subSystemNo"))
+        linkage_sub_system = from_union([lambda x: from_list(from_int, x), from_none], obj.get("linkageSubSystem"))
+        support_linkage_sub_system_list = from_union([lambda x: from_list(from_int, x), from_none], obj.get("supportLinkageSubSystemList"))
         enter_delay = from_union([from_int, from_none], obj.get("enterDelay"))
         exit_delay = from_union([from_int, from_none], obj.get("exitDelay"))
-        stay_arm_delay_time = from_union(
-            [from_int, from_none], obj.get("stayArmDelayTime"))
-        siren_delay_time = from_union(
-            [from_int, from_none], obj.get("sirenDelayTime"))
-        detector_seq = from_union(
-            [from_str, from_none], obj.get("detectorSeq"))
-        cross_zone_cfg = from_union(
-            [CrossZoneCFG.from_dict, from_none], obj.get("CrossZoneCfg"))
-        arm_no_bypass_enabled = from_union(
-            [from_bool, from_none], obj.get("armNoBypassEnabled"))
-        related_pircam = from_union(
-            [RelatedPIRCAM.from_dict, from_none], obj.get("RelatedPIRCAM"))
+        stay_arm_delay_time = from_union([from_int, from_none], obj.get("stayArmDelayTime"))
+        siren_delay_time = from_union([from_int, from_none], obj.get("sirenDelayTime"))
+        detector_seq = from_union([from_str, from_none], obj.get("detectorSeq"))
+        cross_zone_cfg = from_union([CrossZoneCFG.from_dict, from_none], obj.get("CrossZoneCfg"))
+        arm_no_bypass_enabled = from_union([from_bool, from_none], obj.get("armNoBypassEnabled"))
+        related_pircam = from_union([RelatedPIRCAM.from_dict, from_none], obj.get("RelatedPIRCAM"))
         arm_mode = from_union([ArmModeConf, from_none], obj.get("armMode"))
-        zone_attrib = from_union(
-            [ZoneAttrib, from_none], obj.get("zoneAttrib"))
-        final_door_exit_enabled = from_union(
-            [from_bool, from_none], obj.get("finalDoorExitEnabled"))
-        time_restart_enabled = from_union(
-            [from_bool, from_none], obj.get("timeRestartEnabled"))
-        swinger_limit_activation = from_union(
-            [from_int, from_none], obj.get("swingerLimitActivation"))
-        detector_wiring_mode = from_union(
-            [DetectorWiringMode, from_none], obj.get("detectorWiringMode"))
-        detector_access_mode = from_union(
-            [DetectorAccessMode, from_none], obj.get("detectorAccessMode"))
-        anti_masking_enabled = from_union(
-            [from_bool, from_none], obj.get("antiMaskingEnabled"))
+        zone_attrib = from_union([ZoneAttrib, from_none], obj.get("zoneAttrib"))
+        final_door_exit_enabled = from_union([from_bool, from_none], obj.get("finalDoorExitEnabled"))
+        time_restart_enabled = from_union([from_bool, from_none], obj.get("timeRestartEnabled"))
+        swinger_limit_activation = from_union([from_int, from_none], obj.get("swingerLimitActivation"))
+        detector_wiring_mode = from_union([DetectorWiringMode, from_none], obj.get("detectorWiringMode"))
+        detector_access_mode = from_union([DetectorAccessMode, from_none], obj.get("detectorAccessMode"))
+        anti_masking_enabled = from_union([from_bool, from_none], obj.get("antiMaskingEnabled"))
         am_mode = from_union([AMMode, from_none], obj.get("AMMode"))
-        am_delay_time = from_union(
-            [from_int, from_none], obj.get("AMDelayTime"))
-        pulse_sensitivity = from_union(
-            [from_int, from_none], obj.get("pulseSensitivity"))
-        alarm_resistence = from_union(
-            [from_float, from_none], obj.get("alarmResistence"))
-        tamper_resistence = from_union(
-            [from_float, from_none], obj.get("tamperResistence"))
-        module_channel = from_union(
-            [from_int, from_none], obj.get("moduleChannel"))
-        double_zone_cfg_enable = from_union(
-            [from_bool, from_none], obj.get("doubleZoneCfgEnable"))
-        access_module_type = from_union(
-            [AccessModuleType, from_none], obj.get("accessModuleType"))
+        am_delay_time = from_union([from_int, from_none], obj.get("AMDelayTime"))
+        pulse_sensitivity = from_union([from_int, from_none], obj.get("pulseSensitivity"))
+        alarm_resistence = from_union([from_float, from_none], obj.get("alarmResistence"))
+        tamper_resistence = from_union([from_float, from_none], obj.get("tamperResistence"))
+        module_channel = from_union([from_int, from_none], obj.get("moduleChannel"))
+        double_zone_cfg_enable = from_union([from_bool, from_none], obj.get("doubleZoneCfgEnable"))
+        access_module_type = from_union([AccessModuleType, from_none], obj.get("accessModuleType"))
         delay_time = from_union([from_int, from_none], obj.get("delayTime"))
-        timeout_limit = from_union(
-            [from_bool, from_none], obj.get("timeoutLimit"))
+        timeout_limit = from_union([from_bool, from_none], obj.get("timeoutLimit"))
         check_time = from_union([from_int, from_none], obj.get("checkTime"))
-        return ZoneConfig(id, zone_name, detector_type, stay_away_enabled, chime_enabled, silent_enabled, timeout_type,
-                          timeout, related_chan_list, double_knock_enabled, double_knock_time,
-                          new_key_zone_trigger_type_cfg, zone_status_cfg, relate_detector, sub_system_no,
-                          linkage_sub_system, support_linkage_sub_system_list, enter_delay, exit_delay,
-                          stay_arm_delay_time, siren_delay_time, detector_seq, cross_zone_cfg, arm_no_bypass_enabled,
-                          related_pircam, arm_mode, zone_attrib, zone_type, chime_warning_type, final_door_exit_enabled,
-                          time_restart_enabled, swinger_limit_activation, detector_wiring_mode, detector_access_mode,
-                          anti_masking_enabled, am_mode, am_delay_time, pulse_sensitivity, alarm_resistence,
-                          tamper_resistence, module_channel, double_zone_cfg_enable, access_module_type, delay_time,
-                          timeout_limit, check_time)
+        return ZoneConfig(
+            id,
+            zone_name,
+            detector_type,
+            stay_away_enabled,
+            chime_enabled,
+            silent_enabled,
+            timeout_type,
+            timeout,
+            related_chan_list,
+            double_knock_enabled,
+            double_knock_time,
+            new_key_zone_trigger_type_cfg,
+            zone_status_cfg,
+            relate_detector,
+            sub_system_no,
+            linkage_sub_system,
+            support_linkage_sub_system_list,
+            enter_delay,
+            exit_delay,
+            stay_arm_delay_time,
+            siren_delay_time,
+            detector_seq,
+            cross_zone_cfg,
+            arm_no_bypass_enabled,
+            related_pircam,
+            arm_mode,
+            zone_attrib,
+            zone_type,
+            chime_warning_type,
+            final_door_exit_enabled,
+            time_restart_enabled,
+            swinger_limit_activation,
+            detector_wiring_mode,
+            detector_access_mode,
+            anti_masking_enabled,
+            am_mode,
+            am_delay_time,
+            pulse_sensitivity,
+            alarm_resistence,
+            tamper_resistence,
+            module_channel,
+            double_zone_cfg_enable,
+            access_module_type,
+            delay_time,
+            timeout_limit,
+            check_time,
+        )
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -805,109 +802,76 @@ class ZoneConfig:
         result["chimeEnabled"] = from_bool(self.chime_enabled)
         result["silentEnabled"] = from_bool(self.silent_enabled)
         if self.chime_warning_type is not None:
-            result["chimeWarningType"] = to_enum(
-                ChimeWarningType, self.chime_warning_type)
+            result["chimeWarningType"] = to_enum(ChimeWarningType, self.chime_warning_type)
         result["timeoutType"] = to_enum(TimeoutType, self.timeout_type)
         result["timeout"] = from_int(self.timeout)
         if self.relate_detector is not None:
             result["relateDetector"] = from_bool(self.relate_detector)
-        result["RelatedChanList"] = from_list(
-            lambda x: to_class(RelatedChanList, x), self.related_chan_list)
+        result["RelatedChanList"] = from_list(lambda x: to_class(RelatedChanList, x), self.related_chan_list)
         result["doubleKnockEnabled"] = from_bool(self.double_knock_enabled)
         result["doubleKnockTime"] = from_int(self.double_knock_time)
-        result["newKeyZoneTriggerTypeCfg"] = to_enum(
-            NewKeyZoneTriggerTypeCFG, self.new_key_zone_trigger_type_cfg)
+        result["newKeyZoneTriggerTypeCfg"] = to_enum(NewKeyZoneTriggerTypeCFG, self.new_key_zone_trigger_type_cfg)
         result["zoneStatusCfg"] = to_enum(ZoneStatusCFG, self.zone_status_cfg)
         if self.sub_system_no is not None:
-            result["subSystemNo"] = from_union(
-                [from_int, from_none], self.sub_system_no)
+            result["subSystemNo"] = from_union([from_int, from_none], self.sub_system_no)
         if self.linkage_sub_system is not None:
-            result["linkageSubSystem"] = from_union([lambda x: from_list(from_int, x), from_none],
-                                                    self.linkage_sub_system)
+            result["linkageSubSystem"] = from_union([lambda x: from_list(from_int, x), from_none], self.linkage_sub_system)
         if self.support_linkage_sub_system_list is not None:
-            result["supportLinkageSubSystemList"] = from_union([lambda x: from_list(from_int, x), from_none],
-                                                               self.support_linkage_sub_system_list)
+            result["supportLinkageSubSystemList"] = from_union([lambda x: from_list(from_int, x), from_none], self.support_linkage_sub_system_list)
         if self.enter_delay is not None:
-            result["enterDelay"] = from_union(
-                [from_int, from_none], self.enter_delay)
+            result["enterDelay"] = from_union([from_int, from_none], self.enter_delay)
         if self.exit_delay is not None:
-            result["exitDelay"] = from_union(
-                [from_int, from_none], self.exit_delay)
+            result["exitDelay"] = from_union([from_int, from_none], self.exit_delay)
         if self.stay_arm_delay_time is not None:
-            result["stayArmDelayTime"] = from_union(
-                [from_int, from_none], self.stay_arm_delay_time)
+            result["stayArmDelayTime"] = from_union([from_int, from_none], self.stay_arm_delay_time)
         if self.siren_delay_time is not None:
-            result["sirenDelayTime"] = from_union(
-                [from_int, from_none], self.siren_delay_time)
+            result["sirenDelayTime"] = from_union([from_int, from_none], self.siren_delay_time)
         if self.detector_seq is not None:
-            result["detectorSeq"] = from_union(
-                [from_str, from_none], self.detector_seq)
+            result["detectorSeq"] = from_union([from_str, from_none], self.detector_seq)
         if self.cross_zone_cfg is not None:
-            result["CrossZoneCfg"] = from_union(
-                [lambda x: to_class(CrossZoneCFG, x), from_none], self.cross_zone_cfg)
+            result["CrossZoneCfg"] = from_union([lambda x: to_class(CrossZoneCFG, x), from_none], self.cross_zone_cfg)
         if self.arm_no_bypass_enabled is not None:
-            result["armNoBypassEnabled"] = from_union(
-                [from_bool, from_none], self.arm_no_bypass_enabled)
+            result["armNoBypassEnabled"] = from_union([from_bool, from_none], self.arm_no_bypass_enabled)
         if self.related_pircam is not None:
-            result["RelatedPIRCAM"] = from_union(
-                [lambda x: to_class(RelatedPIRCAM, x), from_none], self.related_pircam)
+            result["RelatedPIRCAM"] = from_union([lambda x: to_class(RelatedPIRCAM, x), from_none], self.related_pircam)
         if self.arm_mode is not None:
-            result["armMode"] = from_union(
-                [lambda x: to_enum(ArmModeConf, x), from_none], self.arm_mode)
+            result["armMode"] = from_union([lambda x: to_enum(ArmModeConf, x), from_none], self.arm_mode)
         if self.zone_attrib is not None:
-            result["zoneAttrib"] = from_union(
-                [lambda x: to_enum(ZoneAttrib, x), from_none], self.zone_attrib)
+            result["zoneAttrib"] = from_union([lambda x: to_enum(ZoneAttrib, x), from_none], self.zone_attrib)
         if self.final_door_exit_enabled is not None:
-            result["finalDoorExitEnabled"] = from_union(
-                [from_bool, from_none], self.final_door_exit_enabled)
+            result["finalDoorExitEnabled"] = from_union([from_bool, from_none], self.final_door_exit_enabled)
         if self.time_restart_enabled is not None:
-            result["timeRestartEnabled"] = from_union(
-                [from_bool, from_none], self.time_restart_enabled)
+            result["timeRestartEnabled"] = from_union([from_bool, from_none], self.time_restart_enabled)
         if self.swinger_limit_activation is not None:
-            result["swingerLimitActivation"] = from_union(
-                [from_int, from_none], self.swinger_limit_activation)
+            result["swingerLimitActivation"] = from_union([from_int, from_none], self.swinger_limit_activation)
         if self.detector_wiring_mode is not None:
-            result["detectorWiringMode"] = from_union([lambda x: to_enum(DetectorWiringMode, x), from_none],
-                                                      self.detector_wiring_mode)
+            result["detectorWiringMode"] = from_union([lambda x: to_enum(DetectorWiringMode, x), from_none], self.detector_wiring_mode)
         if self.detector_access_mode is not None:
-            result["detectorAccessMode"] = from_union([lambda x: to_enum(DetectorAccessMode, x), from_none],
-                                                      self.detector_access_mode)
+            result["detectorAccessMode"] = from_union([lambda x: to_enum(DetectorAccessMode, x), from_none], self.detector_access_mode)
         if self.anti_masking_enabled is not None:
-            result["antiMaskingEnabled"] = from_union(
-                [from_bool, from_none], self.anti_masking_enabled)
+            result["antiMaskingEnabled"] = from_union([from_bool, from_none], self.anti_masking_enabled)
         if self.am_mode is not None:
-            result["AMMode"] = from_union(
-                [lambda x: to_enum(AMMode, x), from_none], self.am_mode)
+            result["AMMode"] = from_union([lambda x: to_enum(AMMode, x), from_none], self.am_mode)
         if self.am_delay_time is not None:
-            result["AMDelayTime"] = from_union(
-                [from_int, from_none], self.am_delay_time)
+            result["AMDelayTime"] = from_union([from_int, from_none], self.am_delay_time)
         if self.pulse_sensitivity is not None:
-            result["pulseSensitivity"] = from_union(
-                [from_int, from_none], self.pulse_sensitivity)
+            result["pulseSensitivity"] = from_union([from_int, from_none], self.pulse_sensitivity)
         if self.alarm_resistence is not None:
-            result["alarmResistence"] = from_union(
-                [to_float, from_none], self.alarm_resistence)
+            result["alarmResistence"] = from_union([to_float, from_none], self.alarm_resistence)
         if self.tamper_resistence is not None:
-            result["tamperResistence"] = from_union(
-                [to_float, from_none], self.tamper_resistence)
+            result["tamperResistence"] = from_union([to_float, from_none], self.tamper_resistence)
         if self.module_channel is not None:
-            result["moduleChannel"] = from_union(
-                [from_int, from_none], self.module_channel)
+            result["moduleChannel"] = from_union([from_int, from_none], self.module_channel)
         if self.double_zone_cfg_enable is not None:
-            result["doubleZoneCfgEnable"] = from_union(
-                [from_bool, from_none], self.double_zone_cfg_enable)
+            result["doubleZoneCfgEnable"] = from_union([from_bool, from_none], self.double_zone_cfg_enable)
         if self.access_module_type is not None:
-            result["accessModuleType"] = from_union([lambda x: to_enum(AccessModuleType, x), from_none],
-                                                    self.access_module_type)
+            result["accessModuleType"] = from_union([lambda x: to_enum(AccessModuleType, x), from_none], self.access_module_type)
         if self.delay_time is not None:
-            result["delayTime"] = from_union(
-                [from_int, from_none], self.delay_time)
+            result["delayTime"] = from_union([from_int, from_none], self.delay_time)
         if self.timeout_limit is not None:
-            result["timeoutLimit"] = from_union(
-                [from_bool, from_none], self.timeout_limit)
+            result["timeoutLimit"] = from_union([from_bool, from_none], self.timeout_limit)
         if self.check_time is not None:
-            result["checkTime"] = from_union(
-                [from_int, from_none], self.check_time)
+            result["checkTime"] = from_union([from_int, from_none], self.check_time)
         return result
 
 
@@ -916,7 +880,7 @@ class ListElement:
     zone: ZoneConfig
 
     @staticmethod
-    def from_dict(obj: Any) -> 'ListElement':
+    def from_dict(obj: Any) -> "ListElement":
         assert isinstance(obj, dict)
         zone = ZoneConfig.from_dict(obj.get("Zone"))
         return ListElement(zone)
@@ -932,13 +896,12 @@ class ZonesConf:
     list: List[ListElement]
 
     @staticmethod
-    def from_dict(obj: Any) -> 'ZonesConf':
+    def from_dict(obj: Any) -> "ZonesConf":
         assert isinstance(obj, dict)
         list = from_list(ListElement.from_dict, obj.get("List"))
         return ZonesConf(list)
 
     def to_dict(self) -> dict:
         result: dict = {}
-        result["List"] = from_list(
-            lambda x: to_class(ListElement, x), self.list)
+        result["List"] = from_list(lambda x: to_class(ListElement, x), self.list)
         return result

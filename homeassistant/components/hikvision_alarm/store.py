@@ -4,16 +4,10 @@ import attr
 from collections import OrderedDict
 from typing import MutableMapping, cast
 from homeassistant.loader import bind_hass
-from homeassistant.core import (callback, HomeAssistant)
+from homeassistant.core import callback, HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from homeassistant.const import (
-    STATE_ALARM_ARMED_AWAY,
-    STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_ARMED_NIGHT,
-    STATE_ALARM_ARMED_CUSTOM_BYPASS,
-    STATE_ALARM_ARMED_VACATION
-)
+from homeassistant.const import STATE_ALARM_ARMED_AWAY, STATE_ALARM_ARMED_HOME, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_CUSTOM_BYPASS, STATE_ALARM_ARMED_VACATION
 
 from homeassistant.components.alarm_control_panel import (
     FORMAT_NUMBER as CODE_FORMAT_NUMBER,
@@ -44,18 +38,22 @@ class AreaEntry:
 
     area_id = attr.ib(type=str, default=None)
     name = attr.ib(type=str, default=None)
-    modes = attr.ib(type=[str, ModeEntry], default={
-        STATE_ALARM_ARMED_AWAY: ModeEntry(),
-        STATE_ALARM_ARMED_HOME: ModeEntry(),
-        STATE_ALARM_ARMED_NIGHT: ModeEntry(),
-        STATE_ALARM_ARMED_CUSTOM_BYPASS: ModeEntry(),
-        STATE_ALARM_ARMED_VACATION: ModeEntry()
-    })
+    modes = attr.ib(
+        type=[str, ModeEntry],
+        default={
+            STATE_ALARM_ARMED_AWAY: ModeEntry(),
+            STATE_ALARM_ARMED_HOME: ModeEntry(),
+            STATE_ALARM_ARMED_NIGHT: ModeEntry(),
+            STATE_ALARM_ARMED_CUSTOM_BYPASS: ModeEntry(),
+            STATE_ALARM_ARMED_VACATION: ModeEntry(),
+        },
+    )
 
 
 @attr.s(slots=True, frozen=True)
 class Config:
     """(General) Config storage Entry."""
+
     host = attr.ib(type=str, default="")
     username = attr.ib(type=str, default="")
     password = attr.ib(type=str, default="")
@@ -92,17 +90,24 @@ class MigratableStore(Store):
     async def _async_migrate_func(self, old_version, data: dict):
         area_id = str(int(time.time()))
         data["areas"] = [
-            attr.asdict(AreaEntry(**{
-                "name": "Hikvision",
-                "modes": {
-                    mode: attr.asdict(ModeEntry(
-                        enabled=bool(config["enabled"]),
-                        exit_time=int(config["leave_time"]),
-                        entry_time=int(config["entry_time"]),
-                    ))
-                    for (mode, config) in data["config"]["modes"].items()
-                }
-            }, area_id=area_id))
+            attr.asdict(
+                AreaEntry(
+                    **{
+                        "name": "Hikvision",
+                        "modes": {
+                            mode: attr.asdict(
+                                ModeEntry(
+                                    enabled=bool(config["enabled"]),
+                                    exit_time=int(config["leave_time"]),
+                                    entry_time=int(config["entry_time"]),
+                                )
+                            )
+                            for (mode, config) in data["config"]["modes"].items()
+                        },
+                    },
+                    area_id=area_id,
+                )
+            )
         ]
 
         if "sensors" in data:
@@ -157,11 +162,7 @@ class AlarmoStorage:
                         )
                         for (mode, config) in area["modes"].items()
                     }
-                    areas[area["area_id"]] = AreaEntry(
-                        area_id=area["area_id"],
-                        name=area["name"],
-                        modes=modes
-                    )
+                    areas[area["area_id"]] = AreaEntry(area_id=area["area_id"], name=area["name"], modes=modes)
 
             if "sensors" in data:
                 for sensor in data["sensors"]:
@@ -175,23 +176,9 @@ class AlarmoStorage:
             await self.async_factory_default()
 
     async def async_factory_default(self):
-        self.async_create_area({
-            "name": "Hikvision",
-            "modes": {
-                STATE_ALARM_ARMED_AWAY: attr.asdict(
-                    ModeEntry(
-                        enabled=True,
-                        exit_time=60,
-                        entry_time=60
-                    )
-                ),
-                STATE_ALARM_ARMED_HOME: attr.asdict(
-                    ModeEntry(
-                        enabled=True
-                    )
-                )
-            }
-        })
+        self.async_create_area(
+            {"name": "Hikvision", "modes": {STATE_ALARM_ARMED_AWAY: attr.asdict(ModeEntry(enabled=True, exit_time=60, entry_time=60)), STATE_ALARM_ARMED_HOME: attr.asdict(ModeEntry(enabled=True))}}
+        )
 
     @callback
     def async_schedule_save(self) -> None:
@@ -209,12 +196,8 @@ class AlarmoStorage:
             "config": attr.asdict(self.config),
         }
 
-        store_data["areas"] = [
-            attr.asdict(entry) for entry in self.areas.values()
-        ]
-        store_data["sensors"] = [
-            attr.asdict(entry) for entry in self.sensors.values()
-        ]
+        store_data["areas"] = [attr.asdict(entry) for entry in self.areas.values()]
+        store_data["sensors"] = [attr.asdict(entry) for entry in self.sensors.values()]
 
         return store_data
 
@@ -246,11 +229,7 @@ class AlarmoStorage:
         """Update existing config."""
 
         modes = self.config.modes
-        old = (
-            self.config.modes[mode]
-            if mode in self.config.modes
-            else ModeEntry()
-        )
+        old = self.config.modes[mode] if mode in self.config.modes else ModeEntry()
         new = attr.evolve(old, **changes)
         modes[mode] = new
         self.config = attr.evolve(self.config, **{"modes": modes})
