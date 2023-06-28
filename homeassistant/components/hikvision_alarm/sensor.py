@@ -4,21 +4,17 @@ import logging
 from typing import cast
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    UnitOfTemperature,
-    PERCENTAGE,
-    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
-)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass, STATE_ON, STATE_OFF
-from homeassistant.components.sensor import SensorEntity, DOMAIN as SENSOR_DOMAIN, SensorEntityDescription, SensorDeviceClass, SensorStateClass
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.typing import StateType
+from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass, STATE_ON, STATE_OFF
+from homeassistant.components.sensor import SensorEntity, DOMAIN as SENSOR_DOMAIN, SensorEntityDescription, SensorDeviceClass, SensorStateClass
+
 from . import HikAxProDataUpdateCoordinator
-from .const import DATA_COORDINATOR, DOMAIN
+from . import const
 from .model import DetectorType, Zone, Status, detector_model_to_name
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,7 +23,7 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up a Hikvision ax pro alarm control panel based on a config entry."""
 
-    coordinator: HikAxProDataUpdateCoordinator = hass.data[DOMAIN][DATA_COORDINATOR]
+    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
     devices = []
 
     await coordinator.async_request_refresh()
@@ -43,11 +39,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             device_registry.async_get_or_create(
                 config_entry_id=entry.entry_id,
                 # connections={},
-                identifiers={(DOMAIN, str(entry.entry_id) + "-" + str(zone_config.id))},
+                identifiers={(const.DOMAIN, str(entry.entry_id) + "-" + str(zone_config.id))},
                 manufacturer="HikVision" if zone.zone.model is not None else "Unknown",
                 # suggested_area=zone.zone.,
                 name=zone_config.zone_name,
-                via_device=(DOMAIN, str(coordinator.id)),
+                via_device=(const.DOMAIN, str(coordinator.id)),
                 model=detector_model_to_name(zone.zone.model),
                 sw_version=zone.zone.version,
             )
@@ -97,7 +93,7 @@ class HikDevice:
     def device_info(self) -> DeviceInfo:
         """Return the device info."""
         return DeviceInfo(
-            identifiers={(DOMAIN, str(self._ref_id) + "-" + str(self.zone.id))},
+            identifiers={(const.DOMAIN, str(self._ref_id) + "-" + str(self.zone.id))},
             manufacturer="HikVision" if self.zone.model is not None else "Unknown",
             # suggested_area=zone.zone.,
             name=self.zone.name,
@@ -218,14 +214,14 @@ class HikTemperature(CoordinatorEntity, HikDevice, SensorEntity):
         self._attr_icon = "mdi:thermometer"
         # self._attr_name = f"{self.zone.name} Temperature"
         self._device_class = SensorDeviceClass.TEMPERATURE
-        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+        self._attr_native_unit_of_measurement = const.UnitOfTemperature.CELSIUS
         self._attr_has_entity_name = True
         self.entity_id = f"{SENSOR_DOMAIN}.{coordinator.device_name}-temperature-{zone.id}"
         self.entity_description = SensorEntityDescription(
             SensorDeviceClass.TEMPERATURE,
             device_class=SensorDeviceClass.TEMPERATURE,
             state_class=SensorStateClass.MEASUREMENT,
-            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+            native_unit_of_measurement=const.UnitOfTemperature.CELSIUS,
         )
 
     @property
@@ -260,14 +256,14 @@ class HikHumidity(CoordinatorEntity, HikDevice, SensorEntity):
         self._attr_icon = "mdi:cloud-percent"
         # self._attr_name = f"{self.zone.name} Humidity"
         self._device_class = SensorDeviceClass.HUMIDITY
-        self._attr_native_unit_of_measurement = PERCENTAGE
+        self._attr_native_unit_of_measurement = const.PERCENTAGE
         self._attr_has_entity_name = True
         self.entity_id = f"{SENSOR_DOMAIN}.{coordinator.device_name}-humidity-{zone.id}"
         self.entity_description = SensorEntityDescription(
             SensorDeviceClass.HUMIDITY,
             device_class=SensorDeviceClass.HUMIDITY,
             state_class=SensorStateClass.MEASUREMENT,
-            native_unit_of_measurement=PERCENTAGE,
+            native_unit_of_measurement=const.PERCENTAGE,
         )
 
     @property
@@ -301,7 +297,7 @@ class HikBatteryInfo(CoordinatorEntity, HikDevice, SensorEntity):
         self._attr_unique_id = f"{self.coordinator.device_name}-battery-{zone.id}"
         self._attr_icon = "mdi:battery"
         self._device_class = SensorDeviceClass.BATTERY
-        self._attr_native_unit_of_measurement = PERCENTAGE
+        self._attr_native_unit_of_measurement = const.PERCENTAGE
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._attr_has_entity_name = True
         self.entity_id = f"{SENSOR_DOMAIN}.{coordinator.device_name}-battery-{zone.id}"
@@ -310,7 +306,7 @@ class HikBatteryInfo(CoordinatorEntity, HikDevice, SensorEntity):
             device_class=SensorDeviceClass.BATTERY,
             entity_category=EntityCategory.DIAGNOSTIC,
             state_class=SensorStateClass.MEASUREMENT,
-            native_unit_of_measurement=PERCENTAGE,
+            native_unit_of_measurement=const.PERCENTAGE,
         )
 
     @property
@@ -344,7 +340,7 @@ class HikSignalInfo(CoordinatorEntity, HikDevice, SensorEntity):
         self._attr_unique_id = f"{self.coordinator.device_name}-signal-{zone.id}"
         self._attr_icon = "mdi:signal"
         self._device_class = SensorDeviceClass.SIGNAL_STRENGTH
-        self._attr_native_unit_of_measurement = SIGNAL_STRENGTH_DECIBELS_MILLIWATT
+        self._attr_native_unit_of_measurement = const.SIGNAL_STRENGTH_DECIBELS_MILLIWATT
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._attr_has_entity_name = True
         self.entity_id = f"{SENSOR_DOMAIN}.{coordinator.device_name}-signal-{zone.id}"
@@ -353,7 +349,7 @@ class HikSignalInfo(CoordinatorEntity, HikDevice, SensorEntity):
             device_class=SensorDeviceClass.SIGNAL_STRENGTH,
             entity_category=EntityCategory.DIAGNOSTIC,
             state_class=SensorStateClass.MEASUREMENT,
-            native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+            native_unit_of_measurement=const.SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         )
 
     @property

@@ -1,50 +1,34 @@
 """Config flow for hikvision_axpro integration."""
 import logging
 import voluptuous as vol
+import bcrypt
+import base64
 
 from typing import Any, Final
-from .hikax import HikAx
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
-from datetime import timedelta
-from homeassistant.const import (
-    CONF_CODE,
-    CONF_HOST,
-    CONF_USERNAME,
-    CONF_PASSWORD,
-    CONF_SCAN_INTERVAL,
-    ATTR_NAME,
-    ATTR_CODE_FORMAT,
-)
-from . import HikAxProDataUpdateCoordinator
 from homeassistant.helpers import config_validation as cv
 
-from homeassistant.components.alarm_control_panel import (
-    CodeFormat,
-    ATTR_CODE_ARM_REQUIRED,
-)
-
+from .hikax import HikAx
 from . import const
 
 _LOGGER = logging.getLogger(__name__)
 
-SCAN_INTERVAL: Final = timedelta(seconds=5)
 
 CONFIGURE_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_HOST, default="192.168.1.9"): cv.string,
-        vol.Required(CONF_USERNAME, default="admin"): cv.string,
-        vol.Required(CONF_PASSWORD, default="Elparaiso81"): cv.string,
-        vol.Optional(ATTR_CODE_ARM_REQUIRED, default=True): cv.boolean,
-        vol.Required(const.ATTR_CODE_DISARM_REQUIRED, default=True): cv.boolean,
-        vol.Required(ATTR_CODE_FORMAT, default=CodeFormat.NUMBER): vol.In([CodeFormat.NUMBER, CodeFormat.TEXT]),
-        vol.Required(const.ATTR_ENABLED, default=True): cv.boolean,
-        vol.Optional(ATTR_NAME, default="Maestro"): cv.string,
-        vol.Optional(const.CONF_CODE, default="2854"): str,
-        vol.Required(CONF_SCAN_INTERVAL, default=SCAN_INTERVAL.total_seconds()): int,
-        vol.Optional(const.CONF_ENABLE_DEBUG_OUTPUT, default=True): cv.boolean,
+        vol.Required(const.CONF_HIK_HOST, default=const.DEFAULT_HOST): cv.string,
+        vol.Required(const.CONF_HIK_USERNAME, default=const.DEFAULT_USERNAME): cv.string,
+        vol.Required(const.CONF_HIK_PASSWORD, default=const.DEFAULT_PASSWORD): cv.string,
+        vol.Optional(const.CONF_HIK_CODE_ARM_REQUIRED, default=const.DEFAULT_CODE_ARM_REQUIRED): cv.boolean,
+        vol.Required(const.CONF_HIK_CODE_DISARM_REQUIRED, default=const.DEFAULT_CODE_DISARM_REQUIRED): cv.boolean,
+        vol.Optional(const.CONF_HIK_CODE, default=const.DEFAULT_CODE): str,
+        vol.Required(const.CONF_HIK_MASTER_ENABLED, default=const.DEFAULT_MASTER_ENABLED): cv.boolean,
+        vol.Optional(const.CONF_HIK_MASTER_NAME, default=const.DEFAULT_MASTER_NAME): cv.string,
+        vol.Required(const.CONF_HIK_SCAN_INTERVAL, default=const.DEFAULT_SCAN_INTERVAL.total_seconds()): int,
+        vol.Optional(const.CONF_HIK_ENABLE_DEBUG_OUTPUT, default=const.DEFAULT_ENABLE_DEBUG_OUTPUT): cv.boolean,
     }
 )
 
@@ -86,21 +70,60 @@ class AxHub:
 
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect.
+    """Validate the user input allows us to connect."""
 
-    Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
-    """
-
-    if data[ATTR_CODE_ARM_REQUIRED] or data[const.ATTR_CODE_DISARM_REQUIRED]:
-        if data[CONF_CODE] is None or data[CONF_CODE] == "" or not str.isdigit(data[CONF_CODE]):
+    if data[const.CONF_HIK_CODE_ARM_REQUIRED] or data[const.CONF_HIK_CODE_DISARM_REQUIRED]:
+        if data[const.CONF_HIK_CODE] is None or data[const.CONF_HIK_CODE] == "" or len(data[const.CONF_HIK_CODE]) < 4:
             raise InvalidCode
 
-    hub = AxHub(data[CONF_HOST], data[CONF_USERNAME], data[CONF_PASSWORD], hass)
+    hub = AxHub(data[const.CONF_HIK_HOST], data[const.CONF_HIK_USERNAME], data[const.CONF_HIK_PASSWORD], hass)
 
     if not await hub.authenticate():
         raise InvalidAuth
 
-    return {"title": f"{const.DOMAIN}_{data[CONF_HOST]}"}
+    return {"title": f"{const.DOMAIN}_{data[const.CONF_HIK_HOST]}"}
+
+
+async def format_config(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate the user input allows us to connect."""
+    data_master: dict = {}
+    data_master[const.CONF_HIK_NAME] = data[const.CONF_HIK_MASTER_NAME]
+    data_master[const.CONF_HIK_ENABLED] = data[const.CONF_HIK_MASTER_ENABLED]
+
+    data[const.CONF_HIK_MASTER_CONFIG] = data_master
+
+    del data[const.CONF_HIK_MASTER_NAME]
+    del data[const.CONF_HIK_MASTER_ENABLED]
+
+    data_alarm: dict = {}
+    data_alarm[const.CONF_HIK_USERNAME] = data[const.CONF_HIK_USERNAME]
+    data_alarm[const.CONF_HIK_CODE_ARM_REQUIRED] = data[const.CONF_HIK_CODE_ARM_REQUIRED]
+    data_alarm[const.CONF_HIK_CODE_DISARM_REQUIRED] = data[const.CONF_HIK_CODE_DISARM_REQUIRED]
+    data_alarm[const.CONF_HIK_CAN_ARM] = const.DEFAULT_CAN_ARM
+    data_alarm[const.CONF_HIK_CAN_DISARM] = const.DEFAULT_CAN_DISARM
+    data_alarm[const.CONF_HIK_AREA_LIMIT] = const.DEFAULT_AREA_LIMIT
+    data_alarm[const.CONF_HIK_ZONE_BYPASS] = const.DEFAULT_ZONE_BYPASS
+
+    if len(data[const.CONF_HIK_CODE]) >= 4:
+        data_alarm[const.CONF_HIK_CODE_LENGTH] = len(data[const.CONF_HIK_CODE])
+        data_alarm[const.CONF_HIK_CODE_FORMAT] = const.CodeFormat.NUMBER if data[const.CONF_HIK_CODE].isdigit() else const.CodeFormat.TEXT
+
+        hashed = bcrypt.hashpw(data[const.CONF_HIK_CODE].encode("utf-8"), bcrypt.gensalt(rounds=12))
+        hashed = base64.b64encode(hashed)
+
+        data_alarm[const.CONF_HIK_CODE] = hashed.decode()
+    else:
+        data_alarm[const.CONF_HIK_CODE_LENGTH] = 0
+        data_alarm[const.CONF_HIK_CODE_FORMAT] = const.CodeFormat.NUMBER
+        data_alarm[const.CONF_HIK_CODE] = ""
+
+    data[const.CONF_HIK_ALARM_CONFIG] = data_alarm
+
+    del data[const.CONF_HIK_CODE_ARM_REQUIRED]
+    del data[const.CONF_HIK_CODE_DISARM_REQUIRED]
+    del data[const.CONF_HIK_CODE]
+
+    return data
 
 
 class AxProConfigFlow(config_entries.ConfigFlow, domain=const.DOMAIN):
@@ -131,6 +154,8 @@ class AxProConfigFlow(config_entries.ConfigFlow, domain=const.DOMAIN):
             _LOGGER.exception("Unexpected exception")
             errors["base"] = "unknown"
         else:
+            user_input = await format_config(user_input)
+
             return self.async_create_entry(title=info["title"], data=user_input)
 
         return self.async_show_form(step_id="user", data_schema=CONFIGURE_SCHEMA, errors=errors)
@@ -170,8 +195,7 @@ class AxProOptionsFlowHandler(config_entries.OptionsFlow):
         else:
             _LOGGER.debug("Saving options %s %s", info["title"], user_input)
 
-            coordinator: HikAxProDataUpdateCoordinator = self.hass.data[const.DOMAIN][const.DATA_COORDINATOR]
-            await coordinator.async_update_config(user_input)
+            user_input = await format_config(user_input)
 
             self.hass.config_entries.async_update_entry(
                 self.config_entry,

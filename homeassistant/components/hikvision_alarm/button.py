@@ -5,17 +5,18 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import DeviceInfo
-from . import HikAxProDataUpdateCoordinator
-from . import const
 from homeassistant.helpers import device_registry as dr
 from homeassistant.components.button import ButtonEntity
 from homeassistant.const import EntityCategory
+
+from . import HikAxProDataUpdateCoordinator
+from . import const
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][const.DATA_COORDINATOR]
+    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
 
     async_add_entities([NanoleafIdentifyButton(coordinator)])
 

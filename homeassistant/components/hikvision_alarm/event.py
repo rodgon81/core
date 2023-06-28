@@ -11,9 +11,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class EventHandler:
-    def __init__(self, hass):
+    def __init__(self, hass, entry_id):
         """Class constructor."""
         self.hass = hass
+        self.entry_id = entry_id
 
         self._subscription = async_dispatcher_connect(self.hass, "alarmo_event", self.async_handle_event)
 

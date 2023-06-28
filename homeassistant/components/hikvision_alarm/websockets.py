@@ -1,5 +1,6 @@
 import voluptuous as vol
 import logging
+import homeassistant.util.dt as dt_util
 
 from homeassistant.components import websocket_api
 from homeassistant.core import callback
@@ -8,8 +9,6 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.components.websocket_api import decorators, async_register_command
 
 from . import const
-
-import homeassistant.util.dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,20 +39,30 @@ async def handle_subscribe_updates(hass, connection, msg):
 @callback
 def websocket_get_config(hass, connection, msg):
     """Publish config data."""
-    coordinator = hass.data[const.DOMAIN][const.DATA_COORDINATOR]
+    result = ""
 
-    config = coordinator.store.async_get_config()
+    for (key, val) in hass.data[const.DOMAIN].items():
+        config = val[const.DATA_COORDINATOR].store.async_get_alarm_config()
 
-    connection.send_result(msg["id"], config)
+        result = {
+            const.CONF_HIK_CODE_ARM_REQUIRED: config[const.CONF_HIK_CODE_ARM_REQUIRED],
+            const.CONF_HIK_CODE_DISARM_REQUIRED: config[const.CONF_HIK_CODE_DISARM_REQUIRED],
+            const.CONF_HIK_CODE_FORMAT: config[const.CONF_HIK_CODE_FORMAT],
+        }
+
+    connection.send_result(msg["id"], result)
 
 
 @callback
 def websocket_get_alarm_entities(hass, connection, msg):
     """Publish alarm entity data."""
-    result = [{"entity_id": entity.entity_id, "area_id": area_id} for (area_id, entity) in hass.data[const.DOMAIN][const.DATA_AREAS].items()]
+    result = ""
 
-    if hass.data[const.DOMAIN][const.DATA_MASTER]:
-        result.append({"entity_id": hass.data[const.DOMAIN][const.DATA_MASTER].entity_id, "area_id": 0})
+    for (key, val) in hass.data[const.DOMAIN].items():
+        result = [{"entity_id": entity.entity_id, "area_id": area_id} for (area_id, entity) in val[const.DATA_AREAS].items()]
+
+        if val[const.DATA_MASTER]:
+            result.append({"entity_id": val[const.DATA_MASTER].entity_id, "area_id": 0})
 
     connection.send_result(msg["id"], result)
 
@@ -63,10 +72,10 @@ def websocket_get_countdown(hass, connection, msg):
     """Publish countdown time for alarm entity."""
     entity_id = msg["entity_id"]
 
-    item = next((entity for entity in hass.data[const.DOMAIN][const.DATA_AREAS].values() if entity.entity_id == entity_id), None)
+    item = next((entity for entity in hass.data[const.DOMAIN][0][const.DATA_AREAS].values() if entity.entity_id == entity_id), None)
 
-    if hass.data[const.DOMAIN][const.DATA_MASTER] and not item and hass.data[const.DOMAIN][const.DATA_MASTER].entity_id == entity_id:
-        item = hass.data[const.DOMAIN][const.DATA_MASTER]
+    if hass.data[const.DOMAIN][0][const.DATA_MASTER] and not item and hass.data[const.DOMAIN][0][const.DATA_MASTER].entity_id == entity_id:
+        item = hass.data[const.DOMAIN][0][const.DATA_MASTER]
 
     data = {"delay": item.delay if item else 0, "remaining": round((item.expiration - dt_util.utcnow()).total_seconds(), 2) if item and item.expiration else 0}
 

@@ -2,31 +2,14 @@ import logging
 import time
 import attr
 from collections import OrderedDict
-from typing import MutableMapping, cast
-from homeassistant.loader import bind_hass
+from typing import MutableMapping
 from homeassistant.core import callback, HomeAssistant
-from homeassistant.helpers.storage import Store
 
-from homeassistant.const import STATE_ALARM_ARMED_AWAY, STATE_ALARM_ARMED_HOME, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_CUSTOM_BYPASS, STATE_ALARM_ARMED_VACATION
+from homeassistant.components.alarm_control_panel.const import FORMAT_NUMBER as CODE_FORMAT_NUMBER
 
-from homeassistant.components.alarm_control_panel import (
-    FORMAT_NUMBER as CODE_FORMAT_NUMBER,
-)
-
-from .const import DOMAIN
+from . import const
 
 _LOGGER = logging.getLogger(__name__)
-
-SENSOR_TYPE_OTHER = "other"
-
-DATA_REGISTRY = f"{DOMAIN}_storage"
-STORAGE_KEY = f"{DOMAIN}.storage"
-STORAGE_VERSION = 6
-SAVE_DELAY = 10
-
-
-def omit(obj: dict, blacklisted_keys: list):
-    return {key: val for key, val in obj.items() if key not in blacklisted_keys}
 
 
 @attr.s(slots=True, frozen=True)
@@ -55,13 +38,29 @@ class AreaEntry:
     modes = attr.ib(
         type=[str, ModeEntry],
         default={
-            STATE_ALARM_ARMED_AWAY: ModeEntry(),
-            STATE_ALARM_ARMED_HOME: ModeEntry(),
-            STATE_ALARM_ARMED_NIGHT: ModeEntry(),
-            STATE_ALARM_ARMED_CUSTOM_BYPASS: ModeEntry(),
-            STATE_ALARM_ARMED_VACATION: ModeEntry(),
+            const.STATE_ALARM_ARMED_AWAY: ModeEntry(),
+            const.STATE_ALARM_ARMED_HOME: ModeEntry(),
+            const.STATE_ALARM_ARMED_NIGHT: ModeEntry(),
+            const.STATE_ALARM_ARMED_CUSTOM_BYPASS: ModeEntry(),
+            const.STATE_ALARM_ARMED_VACATION: ModeEntry(),
         },
     )
+
+
+@attr.s(slots=True, frozen=True)
+class AlarmConfig:
+    """Master storage Entry."""
+
+    username = attr.ib(type=str, default="master")
+    code_arm_required = attr.ib(type=bool, default=False)
+    code_disarm_required = attr.ib(type=bool, default=False)
+    can_arm = attr.ib(type=bool, default=False)
+    can_disarm = attr.ib(type=bool, default=False)
+    area_limit = attr.ib(type=list, default=[])
+    zone_bypass = attr.ib(type=bool, default=False)
+    code_length = attr.ib(type=int, default=0)
+    code_format = attr.ib(type=str, default=CODE_FORMAT_NUMBER)
+    code = attr.ib(type=str, default="")
 
 
 @attr.s(slots=True, frozen=True)
@@ -71,14 +70,10 @@ class Config:
     host = attr.ib(type=str, default="")
     username = attr.ib(type=str, default="")
     password = attr.ib(type=str, default="")
-    code_arm_required = attr.ib(type=bool, default=False)
-    code_disarm_required = attr.ib(type=bool, default=False)
-    code_format = attr.ib(type=str, default=CODE_FORMAT_NUMBER)
-    enabled = attr.ib(type=bool, default=True)
-    name = attr.ib(type=str, default="master_test")
-    code = attr.ib(type=str, default="")
     scan_interval = attr.ib(type=int, default=5)
     enable_debug_output = attr.ib(type=bool, default=True)
+    master_config = attr.ib(type=MasterConfig, default=MasterConfig())
+    alarm_config = attr.ib(type=AlarmConfig, default=AlarmConfig())
 
 
 @attr.s(slots=True, frozen=True)
@@ -98,22 +93,6 @@ class SensorEntry:
     auto_bypass_modes = attr.ib(type=list, default=[])
     area = attr.ib(type=str, default=None)
     enabled = attr.ib(type=bool, default=True)
-
-
-@attr.s(slots=True, frozen=True)
-class UserEntry:
-    """User storage Entry."""
-
-    user_id = attr.ib(type=str, default=None)
-    name = attr.ib(type=str, default="")
-    enabled = attr.ib(type=bool, default=True)
-    code = attr.ib(type=str, default="")
-    can_arm = attr.ib(type=bool, default=False)
-    can_disarm = attr.ib(type=bool, default=False)
-    is_override_code = attr.ib(type=bool, default=False)
-    code_format = attr.ib(type=str, default="")
-    code_length = attr.ib(type=int, default=0)
-    area_limit = attr.ib(type=list, default=[])
 
 
 @attr.s(slots=True, frozen=True)
@@ -154,17 +133,6 @@ class AutomationEntry:
     enabled = attr.ib(type=bool, default=True)
 
 
-@attr.s(slots=True, frozen=True)
-class SensorGroupEntry:
-    """Sensor group storage Entry."""
-
-    group_id = attr.ib(type=str, default=None)
-    name = attr.ib(type=str, default="")
-    entities = attr.ib(type=list, default=[])
-    timeout = attr.ib(type=int, default=0)
-    event_count = attr.ib(type=int, default=2)
-
-
 def parse_automation_entry(data: dict):
     def create_trigger_entity(config: dict):
         if "event" in config:
@@ -173,6 +141,7 @@ def parse_automation_entry(data: dict):
             return EntityTriggerEntry(**config)
 
     output = {}
+
     if "triggers" in data:
         output["triggers"] = list(map(create_trigger_entity, data["triggers"]))
     if "actions" in data:
@@ -188,74 +157,6 @@ def parse_automation_entry(data: dict):
     return output
 
 
-class MigratableStore(Store):
-    async def _async_migrate_func(self, old_version, data: dict):
-        def migrate_automation(data):
-            if old_version <= 2:
-                data["triggers"] = [{"event": el["state"] if "state" in el else el["event"], "area": el.get("area"), "modes": data["modes"]} for el in data["triggers"]]
-
-                data["type"] = "notification" if "is_notification" in data and data["is_notification"] else "action"
-
-            if old_version <= 5:
-                data["actions"] = [{"service": el.get("service"), "entity_id": el.get("entity_id"), "data": el.get("service_data")} for el in data["actions"]]
-
-            return attr.asdict(AutomationEntry(**parse_automation_entry(data)))
-
-        if old_version == 1:
-            area_id = str(int(time.time()))
-            data["areas"] = [
-                attr.asdict(
-                    AreaEntry(
-                        **{
-                            "name": "Alarmo",
-                            "modes": {
-                                mode: attr.asdict(
-                                    ModeEntry(
-                                        enabled=bool(config["enabled"]), exit_time=int(config["leave_time"]), entry_time=int(config["entry_time"]), trigger_time=int(data["config"]["trigger_time"])
-                                    )
-                                )
-                                for (mode, config) in data["config"]["modes"].items()
-                            },
-                        },
-                        area_id=area_id,
-                    )
-                )
-            ]
-
-            if "sensors" in data:
-                for sensor in data["sensors"]:
-                    sensor["area"] = area_id
-
-        if old_version <= 3:
-            data["sensors"] = [
-                attr.asdict(
-                    SensorEntry(
-                        **{
-                            **omit(sensor, ["immediate", "name"]),
-                            "use_exit_delay": not sensor["immediate"] and not sensor["always_on"],
-                            "use_entry_delay": not sensor["immediate"] and not sensor["always_on"],
-                            "auto_bypass_modes": sensor["modes"] if "auto_bypass" in sensor and sensor["auto_bypass"] else [],
-                        }
-                    )
-                )
-                for sensor in data["sensors"]
-            ]
-
-        if old_version <= 4:
-            data["sensors"] = [
-                attr.asdict(
-                    SensorEntry(
-                        **omit(sensor, ["name"]),
-                    )
-                )
-                for sensor in data["sensors"]
-            ]
-
-        data["automations"] = [migrate_automation(automation) for automation in data["automations"]]
-
-        return data
-
-
 class AlarmoStorage:
     """Class to hold alarmo configuration data."""
 
@@ -263,110 +164,52 @@ class AlarmoStorage:
         """Initialize the storage."""
         self.hass = hass
         self.config: Config = Config()
+        self.master_config: MasterConfig = MasterConfig()
+        self.alarm_config: AlarmConfig = AlarmConfig()
         self.areas: MutableMapping[str, AreaEntry] = {}
         self.sensors: MutableMapping[str, SensorEntry] = {}
-        self.users: MutableMapping[str, UserEntry] = {}
         self.automations: MutableMapping[str, AutomationEntry] = {}
-        self.sensor_groups: MutableMapping[str, SensorGroupEntry] = {}
-        self._store = MigratableStore(hass, STORAGE_VERSION, STORAGE_KEY)
-
-    async def async_load(self) -> None:
-        """Load the registry of schedule entries."""
-        data = await self._store.async_load()
-        config: Config = Config()
-        areas: "OrderedDict[str, AreaEntry]" = OrderedDict()
-        sensors: "OrderedDict[str, SensorEntry]" = OrderedDict()
-        users: "OrderedDict[str, UserEntry]" = OrderedDict()
-        automations: "OrderedDict[str, AutomationEntry]" = OrderedDict()
-        sensor_groups: "OrderedDict[str, SensorGroupEntry]" = OrderedDict()
-
-        if data is not None:
-            config = Config(
-                code_arm_required=data["config"]["code_arm_required"],
-                code_disarm_required=data["config"]["code_disarm_required"],
-                code_format=data["config"]["code_format"],
-                # disarm_after_trigger=data["config"]["disarm_after_trigger"],
-            )
-
-            if "master" in data["config"]:
-                config = attr.evolve(
-                    config,
-                    **{
-                        "master": MasterConfig(**data["config"]["master"]),
-                    },
-                )
-
-            if "areas" in data:
-                for area in data["areas"]:
-                    modes = {mode: ModeEntry(enabled=config["enabled"], exit_time=config["exit_time"], entry_time=config["entry_time"]) for (mode, config) in area["modes"].items()}
-                    areas[area["area_id"]] = AreaEntry(area_id=area["area_id"], name=area["name"], modes=modes)
-
-            if "sensors" in data:
-                for sensor in data["sensors"]:
-                    sensors[sensor["entity_id"]] = SensorEntry(**sensor)
-
-            if "users" in data:
-                for user in data["users"]:
-                    users[user["user_id"]] = UserEntry(**omit(user, ["is_admin"]))
-
-            if "automations" in data:
-                for automation in data["automations"]:
-                    automations[automation["automation_id"]] = AutomationEntry(**parse_automation_entry(automation))
-
-            if "sensor_groups" in data:
-                for group in data["sensor_groups"]:
-                    sensor_groups[group["group_id"]] = SensorGroupEntry(**group)
-
-        self.config = config
-        self.areas = areas
-        self.sensors = sensors
-        self.automations = automations
-        self.users = users
-        self.sensor_groups = sensor_groups
-
-        if not areas:
-            await self.async_factory_default()
-
-    async def async_factory_default(self):
-        self.async_create_area(
-            {"name": "Hikvision", "modes": {STATE_ALARM_ARMED_AWAY: attr.asdict(ModeEntry(enabled=True, exit_time=60, entry_time=60)), STATE_ALARM_ARMED_HOME: attr.asdict(ModeEntry(enabled=True))}}
-        )
-
-    @callback
-    def async_schedule_save(self) -> None:
-        """Schedule saving the registry of alarmo."""
-        self._store.async_delay_save(self._data_to_save, SAVE_DELAY)
-
-    async def async_save(self) -> None:
-        """Save the registry of alarmo."""
-        await self._store.async_save(self._data_to_save())
-
-    @callback
-    def _data_to_save(self) -> dict:
-        """Return data for the registry for alarmo to store in a file."""
-        store_data = {
-            "config": attr.asdict(self.config),
-        }
-
-        store_data["areas"] = [attr.asdict(entry) for entry in self.areas.values()]
-        store_data["sensors"] = [attr.asdict(entry) for entry in self.sensors.values()]
-        store_data["users"] = [attr.asdict(entry) for entry in self.users.values()]
-        store_data["automations"] = [attr.asdict(entry) for entry in self.automations.values()]
-        store_data["sensor_groups"] = [attr.asdict(entry) for entry in self.sensor_groups.values()]
-
-        return store_data
 
     async def async_delete(self):
         """Delete config."""
         _LOGGER.warning("Removing alarmo configuration data!")
-        await self._store.async_remove()
-        self.config = Config()
+
+        self.config = {}
+        self.master_config = {}
+        self.alarm_config = {}
         self.areas = {}
         self.sensors = {}
-        self.users = {}
         self.automations = {}
-        self.sensor_groups = {}
-        await self.async_factory_default()
+
+    @callback
+    def async_get_master_config(self):
+        res = self.master_config
+        return attr.asdict(res)
+
+    @callback
+    def async_update_master_config(self, changes: dict):
+        """Update existing config."""
+        old = self.master_config
+        new = attr.evolve(old, **changes)
+
+        self.master_config = new
+
+        return attr.asdict(self.master_config)
+
+    @callback
+    def async_get_alarm_config(self):
+        res = self.alarm_config
+        return attr.asdict(res)
+
+    @callback
+    def async_update_alarm_config(self, changes: dict):
+        """Update existing config."""
+        old = self.alarm_config
+        new = attr.evolve(old, **changes)
+
+        self.alarm_config = new
+
+        return attr.asdict(self.alarm_config)
 
     @callback
     def async_get_config(self):
@@ -375,11 +218,12 @@ class AlarmoStorage:
     @callback
     def async_update_config(self, changes: dict):
         """Update existing config."""
-
         old = self.config
-        new = self.config = attr.evolve(old, **changes)
-        self.async_schedule_save()
-        return attr.asdict(new)
+        new = attr.evolve(old, **changes)
+
+        self.config = new
+
+        return attr.asdict(self.config)
 
     @callback
     def async_update_mode_config(self, mode: str, changes: dict):
@@ -390,22 +234,46 @@ class AlarmoStorage:
         new = attr.evolve(old, **changes)
         modes[mode] = new
         self.config = attr.evolve(self.config, **{"modes": modes})
-        self.async_schedule_save()
+
         return new
 
     @callback
     def async_get_area(self, area_id) -> AreaEntry:
         """Get an existing AreaEntry by id."""
-        res = self.areas.get(area_id)
-        return attr.asdict(res) if res else None
+        # res = self.areas.get(area_id)
+        # return attr.asdict(res) if res else None
+
+        options: dict = {}
+        options["enabled"] = True
+        options["exit_time"] = 20
+        options["entry_time"] = 30
+        options["trigger_time"] = 30
+
+        modes: dict = {}
+        modes[const.STATE_ALARM_ARMED_AWAY] = options
+        modes[const.STATE_ALARM_ARMED_HOME] = options
+
+        config: dict = {}
+        config["area_id"] = area_id
+        config["name"] = f"Area{area_id}"
+        config["modes"] = modes
+
+        return config
 
     @callback
     def async_get_areas(self):
         """Get an existing AreaEntry by id."""
-        res = {}
-        for (key, val) in self.areas.items():
-            res[key] = attr.asdict(val)
-        return res
+        # res = {}
+        # for (key, val) in self.areas.items():
+        # res[key] = attr.asdict(val)
+        # return res
+
+        areas = {}
+        areas[1] = self.async_get_area(1)
+        areas[2] = self.async_get_area(2)
+        areas[3] = self.async_get_area(3)
+        areas[4] = self.async_get_area(4)
+        return areas
 
     @callback
     def async_create_area(self, data: dict) -> AreaEntry:
@@ -413,7 +281,7 @@ class AlarmoStorage:
         area_id = str(int(time.time()))
         new_area = AreaEntry(**data, area_id=area_id)
         self.areas[area_id] = new_area
-        self.async_schedule_save()
+
         return attr.asdict(new_area)
 
     @callback
@@ -421,7 +289,7 @@ class AlarmoStorage:
         """Delete AreaEntry."""
         if area_id in self.areas:
             del self.areas[area_id]
-            self.async_schedule_save()
+
             return True
         return False
 
@@ -430,21 +298,24 @@ class AlarmoStorage:
         """Update existing self."""
         old = self.areas[area_id]
         new = self.areas[area_id] = attr.evolve(old, **changes)
-        self.async_schedule_save()
+
         return attr.asdict(new)
 
     @callback
     def async_get_sensor(self, entity_id) -> SensorEntry:
         """Get an existing SensorEntry by id."""
         res = self.sensors.get(entity_id)
+
         return attr.asdict(res) if res else None
 
     @callback
     def async_get_sensors(self):
         """Get an existing SensorEntry by id."""
         res = {}
+
         for (key, val) in self.sensors.items():
             res[key] = attr.asdict(val)
+
         return res
 
     @callback
@@ -452,9 +323,10 @@ class AlarmoStorage:
         """Create a new SensorEntry."""
         if entity_id in self.sensors:
             return False
+
         new_sensor = SensorEntry(**data, entity_id=entity_id)
         self.sensors[entity_id] = new_sensor
-        self.async_schedule_save()
+
         return new_sensor
 
     @callback
@@ -462,8 +334,9 @@ class AlarmoStorage:
         """Delete SensorEntry."""
         if entity_id in self.sensors:
             del self.sensors[entity_id]
-            self.async_schedule_save()
+
             return True
+
         return False
 
     @callback
@@ -471,55 +344,17 @@ class AlarmoStorage:
         """Update existing SensorEntry."""
         old = self.sensors[entity_id]
         new = self.sensors[entity_id] = attr.evolve(old, **changes)
-        self.async_schedule_save()
-        return new
 
-    @callback
-    def async_get_user(self, user_id) -> UserEntry:
-        """Get an existing UserEntry by id."""
-        res = self.users.get(user_id)
-        return attr.asdict(res) if res else None
-
-    @callback
-    def async_get_users(self):
-        """Get an existing UserEntry by id."""
-        res = {}
-        for (key, val) in self.users.items():
-            res[key] = attr.asdict(val)
-        return res
-
-    @callback
-    def async_create_user(self, data: dict) -> UserEntry:
-        """Create a new UserEntry."""
-        user_id = str(int(time.time()))
-        new_user = UserEntry(**data, user_id=user_id)
-        self.users[user_id] = new_user
-        self.async_schedule_save()
-        return new_user
-
-    @callback
-    def async_delete_user(self, user_id: str) -> None:
-        """Delete UserEntry."""
-        if user_id in self.users:
-            del self.users[user_id]
-            self.async_schedule_save()
-            return True
-        return False
-
-    @callback
-    def async_update_user(self, user_id: str, changes: dict) -> UserEntry:
-        """Update existing UserEntry."""
-        old = self.users[user_id]
-        new = self.users[user_id] = attr.evolve(old, **changes)
-        self.async_schedule_save()
         return new
 
     @callback
     def async_get_automations(self):
         """Get an existing AutomationEntry by id."""
         res = {}
+
         for (key, val) in self.automations.items():
             res[key] = attr.asdict(val)
+
         return res
 
     @callback
@@ -528,7 +363,7 @@ class AlarmoStorage:
         automation_id = str(int(time.time()))
         new_automation = AutomationEntry(**parse_automation_entry(data), automation_id=automation_id)
         self.automations[automation_id] = new_automation
-        self.async_schedule_save()
+
         return new_automation
 
     @callback
@@ -536,8 +371,9 @@ class AlarmoStorage:
         """Delete AutomationEntry."""
         if automation_id in self.automations:
             del self.automations[automation_id]
-            self.async_schedule_save()
+
             return True
+
         return False
 
     @callback
@@ -545,22 +381,5 @@ class AlarmoStorage:
         """Update existing AutomationEntry."""
         old = self.automations[automation_id]
         new = self.automations[automation_id] = attr.evolve(old, **parse_automation_entry(changes))
-        self.async_schedule_save()
+
         return new
-
-
-@bind_hass
-async def async_get_registry(hass: HomeAssistant) -> AlarmoStorage:
-    """Return alarmo storage instance."""
-    task = hass.data.get(DATA_REGISTRY)
-
-    if task is None:
-
-        async def _load_reg() -> AlarmoStorage:
-            registry = AlarmoStorage(hass)
-            await registry.async_load()
-            return registry
-
-        task = hass.data[DATA_REGISTRY] = hass.async_create_task(_load_reg())
-
-    return cast(AlarmoStorage, await task)

@@ -1,86 +1,43 @@
 """The hikvision_axpro integration."""
 import asyncio
 import logging
-import bcrypt
-import base64
 
 from datetime import timedelta
 from typing import Optional
 from collections.abc import Callable
 from homeassistant.core import callback
-from homeassistant.components.alarm_control_panel import CodeFormat, ATTR_CODE_ARM_REQUIRED, SCAN_INTERVAL
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from .hikax import HikAx
 from async_timeout import timeout
-from .store import async_get_registry, AlarmoStorage
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    ATTR_CODE,
-    ATTR_NAME,
-    ATTR_CODE_FORMAT,
-    CONF_HOST,
-    CONF_USERNAME,
-    CONF_PASSWORD,
-    CONF_CODE,
-    CONF_SCAN_INTERVAL,
-    Platform,
-    STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_ARMED_VACATION,
-    STATE_ALARM_ARMED_AWAY,
-    STATE_ALARM_DISARMED,
-    STATE_ALARM_TRIGGERED,
-    SERVICE_RELOAD,
-)
-
-from homeassistant.helpers.dispatcher import (
-    async_dispatcher_connect,
-    async_dispatcher_send,
-)
-
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from . import const
 from .model import ZonesResponse, Zone, SubSystemResponse, SubSys, Arming, ZonesConf, ZoneConfig
 from .websockets import async_register_websockets
-from . import const
-
-# from .automations import AutomationHandler
+from .hikax import HikAx
+from .store import AlarmoStorage
+from .automations import AutomationHandler
 from .event import EventHandler
 
-PLATFORMS: list[Platform] = [Platform.ALARM_CONTROL_PANEL, Platform.SENSOR, Platform.BUTTON]
-
 _LOGGER = logging.getLogger(__name__)
+_LOGGER.setLevel(logging.DEBUG)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigEntry):
     """Set up the hikvision_axpro integration component."""
-    hass.data.setdefault(const.DOMAIN, {})
-
-    async def _handle_reload(service):
-        """Handle reload service call."""
-        _LOGGER.info("Service %s.reload called: reloading integration", const.DOMAIN)
-
-        current_entries = hass.config_entries.async_entries(const.DOMAIN)
-
-        reload_tasks = [hass.config_entries.async_reload(entry.entry_id) for entry in current_entries]
-
-        await asyncio.gather(*reload_tasks)
-
-    hass.helpers.service.async_register_admin_service(
-        const.DOMAIN,
-        SERVICE_RELOAD,
-        _handle_reload,
-    )
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up hikvision_axpro from a config entry."""
-    store = await async_get_registry(hass)
+    _LOGGER.debug("async_setup_entry de init")
 
-    axpro = HikAx(entry.data[CONF_HOST], entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
+    store = AlarmoStorage(hass)
+
+    axpro = HikAx(entry.data[const.CONF_HIK_HOST], entry.data[const.CONF_HIK_USERNAME], entry.data[const.CONF_HIK_PASSWORD])
 
     coordinator = HikAxProDataUpdateCoordinator(store, hass, axpro, entry)
 
@@ -105,147 +62,181 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     hass.data.setdefault(const.DOMAIN, {})
-    hass.data[const.DOMAIN] = {const.DATA_COORDINATOR: coordinator, const.DATA_AREAS: {}, const.DATA_MASTER: None}
+    hass.data[const.DOMAIN][entry.entry_id] = {const.DATA_COORDINATOR: coordinator, const.DATA_AREAS: {}, const.DATA_MASTER: None}
 
     await coordinator.async_update_config(entry.data)
 
-    if entry.unique_id is None:
-        hass.config_entries.async_update_entry(entry, unique_id=coordinator.id, data={})
+    # if entry.unique_id is None:
+    # hass.config_entries.async_update_entry(entry, unique_id=coordinator.id, data={})
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, const.PLATFORMS)
 
     # Websocket support
     await async_register_websockets(hass)
+
+    entry.async_on_unload(entry.add_update_listener(update_listener))
+
+    async def _handle_reload(service):
+        """Handle reload service call."""
+        _LOGGER.info("Service %s.reload called: reloading integration", const.DOMAIN)
+
+        current_entries = hass.config_entries.async_entries(const.DOMAIN)
+
+        reload_tasks = [hass.config_entries.async_reload(entry.entry_id) for entry in current_entries]
+
+        await asyncio.gather(*reload_tasks)
+
+    hass.helpers.service.async_register_admin_service(
+        const.DOMAIN,
+        const.SERVICE_RELOAD,
+        _handle_reload,
+    )
 
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        hass.data[const.DOMAIN].pop(entry.entry_id)
+    _LOGGER.debug("async_unload_entry de init")
+
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, const.PLATFORMS)
 
     if not unload_ok:
         return False
 
-    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][const.DATA_COORDINATOR]
+    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
     await coordinator.async_unload()
+
+    hass.data[const.DOMAIN].pop(entry.entry_id)
 
     return True
 
 
 async def async_remove_entry(hass, entry):
     """Remove Alarmo config entry."""
-    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][const.DATA_COORDINATOR]
+    _LOGGER.debug("async_remove_entry de init")
+
+    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
     await coordinator.async_delete_config()
+
     del hass.data[const.DOMAIN]
 
 
 async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry):
     """Update listener."""
+    _LOGGER.debug("update_listener de init")
+
     await hass.config_entries.async_reload(config_entry.entry_id)
 
 
 class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching ax pro data."""
 
-    axpro: HikAx
-    zone_status: Optional[ZonesResponse]
-    zones: Optional[dict[int, Zone]] = None
-    device_model: Optional[str] = None
-    device_name: Optional[str] = None
-    sub_systems: dict[int, SubSys] = {}
-    """ Zones aka devices """
-    devices: dict[int, ZoneConfig] = {}
-    id: Optional[str] = None
-    firmware_version: Optional[str] = None
-    firmware_released_date: Optional[str] = None
-
-    store: AlarmoStorage
-    hass: HomeAssistant
-    entry: ConfigEntry
-
     def __init__(self, store, hass, axpro: HikAx, entry: ConfigEntry):
         _LOGGER.debug("__init__ HikAxProDataUpdateCoordinator")
-        self.hass = hass
-        self.store = store
-        self.axpro = axpro
-        self.state = None
-        self.zone_status = None
-        self.use_code_arming = entry.data[ATTR_CODE_ARM_REQUIRED]
-        self.use_code_disarming = entry.data[const.ATTR_CODE_DISARM_REQUIRED]
-        self.code = entry.data[ATTR_CODE_FORMAT]
+        self.hass: HomeAssistant = hass
+        self.store: AlarmoStorage = store
+        self.axpro: HikAx = axpro
+        self.zone_status: Optional[ZonesResponse] = None
         self._subscriptions = []
-        self.entry = entry
+        self.entry: ConfigEntry = entry
+        self.zones: Optional[dict[int, Zone]] = None
+        self.device_model: Optional[str] = None
+        self.device_name: Optional[str] = None
+        self.sub_systems: dict[int, SubSys] = {}
+        """ Zones aka devices """
+        self.devices: dict[int, ZoneConfig] = {}
+        self.id: Optional[str] = None
+        self.firmware_version: Optional[str] = None
+        self.firmware_released_date: Optional[str] = None
 
         self._subscriptions.append(async_dispatcher_connect(hass, "alarmo_platform_loaded", self.setup_alarm_entities))
 
-        update_interval: float = entry.data.get(CONF_SCAN_INTERVAL, SCAN_INTERVAL.total_seconds())
-
-        super().__init__(hass, _LOGGER, name=const.DOMAIN, update_interval=timedelta(seconds=update_interval))
+        super().__init__(hass, _LOGGER, name=const.DOMAIN, update_interval=timedelta(seconds=self.entry.data[const.CONF_HIK_SCAN_INTERVAL]))
 
     @callback
     def setup_alarm_entities(self):
-        _LOGGER.debug("setup_alarm_entities")
-        # self.hass.data[const.DOMAIN]["automation_handler"] = AutomationHandler(self.hass)
-        self.hass.data[const.DOMAIN]["event_handler"] = EventHandler(self.hass)
+        _LOGGER.debug("setup_alarm_entities de Coordinator")
+        self.hass.data[const.DOMAIN][self.entry.entry_id]["automation_handler"] = AutomationHandler(self.hass, self.entry.entry_id)
+        self.hass.data[const.DOMAIN][self.entry.entry_id]["event_handler"] = EventHandler(self.hass, self.entry.entry_id)
 
-        areas = self.sub_systems  # self.store.async_get_areas()
-        config = self.store.async_get_config()
+        _LOGGER.debug("self.entry.data: %s", self.entry.data[const.CONF_HIK_MASTER_CONFIG])
 
-        _LOGGER.debug("areas: %s", areas)
-        _LOGGER.debug("config: %s", config)
+        areas = self.store.async_get_areas()
+
+        _LOGGER.debug("async_get_areas: %s", areas)
+
+        config = self.store.async_get_master_config()  # self.entry.data[const.CONF_HIK_MASTER_CONFIG]
+
+        _LOGGER.debug("async_get_master_config: %s", config)
 
         for item in areas.values():
             async_dispatcher_send(self.hass, "alarmo_register_entity", item)
 
-        if len(areas) > 1 and config[const.ATTR_ENABLED]:
+        if len(areas) > 1 and config[const.CONF_HIK_ENABLED]:
             async_dispatcher_send(self.hass, "alarmo_register_master", config)
 
     # llamado de websoket
     async def async_update_config(self, data: dict):
-        if data.get(const.CONF_ENABLE_DEBUG_OUTPUT):
+        _LOGGER.debug("async_update_config de Coordinator")
+
+        if data.get(const.CONF_HIK_ENABLE_DEBUG_OUTPUT):
             _LOGGER.setLevel(logging.DEBUG)
         else:
             _LOGGER.setLevel(logging.NOTSET)
 
-        old_config = self.store.async_get_config()
+        old_config = self.store.async_get_master_config()
 
-        _LOGGER.debug("old_config: %s", old_config)
+        _LOGGER.debug("async_get_master_config: %s", old_config)
         _LOGGER.debug("data: %s", data)
 
-        if old_config[const.ATTR_ENABLED] != data[const.ATTR_ENABLED] or old_config[const.ATTR_NAME] != data[const.ATTR_NAME]:
-            if self.hass.data[const.DOMAIN][const.ATTR_MASTER]:
+        if old_config != data[const.CONF_HIK_MASTER_CONFIG]:
+            if self.hass.data[const.DOMAIN][self.entry.entry_id][const.ATTR_MASTER]:
                 await self.async_remove_entity(const.ATTR_MASTER)
-            if data[const.ATTR_ENABLED]:
-                async_dispatcher_send(self.hass, "alarmo_register_master", data)
+            if data[const.CONF_HIK_MASTER_CONFIG][const.CONF_HIK_ENABLED]:
+                async_dispatcher_send(self.hass, "alarmo_register_master", data[const.CONF_HIK_MASTER_CONFIG])
+            else:
+                automations = self.hass.data[const.DOMAIN][self.entry.entry_id]["automation_handler"].get_automations_by_area(None)
 
-        self.store.async_update_config(data)
+                if len(automations):
+                    for el in automations:
+                        self.store.async_delete_automation(el)
+                    async_dispatcher_send(self.hass, "alarmo_automations_updated")
+
+        self.store.async_update_master_config(data[const.CONF_HIK_MASTER_CONFIG])
+        self.store.async_update_alarm_config(data[const.CONF_HIK_ALARM_CONFIG])
+
         async_dispatcher_send(self.hass, "alarmo_config_updated")
 
     # llamado de websoket
     async def async_update_area_config(self, area_id: str = None, data: dict = {}):
+        _LOGGER.debug("async_update_area_config de Coordinator")
         if const.ATTR_REMOVE in data:
             # delete an area
             res = self.store.async_get_area(area_id)
+
             if not res:
                 return
+
             sensors = self.store.async_get_sensors()
             sensors = dict(filter(lambda el: el[1]["area"] == area_id, sensors.items()))
+
             if sensors:
                 for el in sensors.keys():
                     self.store.async_delete_sensor(el)
                 async_dispatcher_send(self.hass, "alarmo_sensors_updated")
 
             self.store.async_delete_area(area_id)
+
             await self.async_remove_entity(area_id)
 
-            if len(self.store.async_get_areas()) == 1 and self.hass.data[const.DOMAIN]["master"]:
+            if len(self.store.async_get_areas()) == 1 and self.hass.data[const.DOMAIN][self.entry.entry_id]["master"]:
                 await self.async_remove_entity("master")
 
         elif self.store.async_get_area(area_id):
             # modify an area
             entry = self.store.async_update_area(area_id, data)
+
             if "name" not in data:
                 async_dispatcher_send(self.hass, "alarmo_config_updated", area_id)
             else:
@@ -254,6 +245,7 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         else:
             # create an area
             entry = self.store.async_create_area(data)
+
             async_dispatcher_send(self.hass, "alarmo_register_entity", entry)
 
             config = self.store.async_get_config()
@@ -263,6 +255,8 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
 
     # llamado de websoket
     async def async_update_sensor_config(self, entity_id: str, data: dict):
+        _LOGGER.debug("async_update_sensor_config de Coordinator")
+
         if const.ATTR_REMOVE in data:
             self.store.async_delete_sensor(entity_id)
         elif self.store.async_get_sensor(entity_id):
@@ -272,57 +266,33 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
 
         async_dispatcher_send(self.hass, "alarmo_sensors_updated")
 
-    # se llama desde panel alarma
-    def async_authenticate_user(self, code: str):
-        code = "285479"
-
-        hashed = bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt(rounds=12))
-        hashed = base64.b64encode(hashed)
-
-        user: dict = {}
-        user["user_id"] = 1
-        user[ATTR_NAME] = "Familia"
-        user["enabled"] = True
-        user[ATTR_CODE] = hashed.decode()
-        user["can_arm"] = True
-        user["can_disarm"] = True
-        user[const.ATTR_IS_OVERRIDE_CODE] = False
-        user[const.ATTR_CODE_FORMAT] = "number" if user[ATTR_CODE].isdigit() else "text"
-        user[const.ATTR_CODE_LENGTH] = len(user[ATTR_CODE])
-        user[const.ATTR_AREA_LIMIT] = []
-
-        # ------------------------------------------------
-
-        if user[ATTR_CODE]:
-            hash = base64.b64decode(user[ATTR_CODE])
-            if bcrypt.checkpw(code.encode("utf-8"), hash):
-                return user
-
-        return
-
     async def async_remove_entity(self, area_id: str):
+        _LOGGER.debug("async_remove_entity de Coordinator")
+
         entity_registry = self.hass.helpers.entity_registry.async_get(self.hass)
+
         if area_id == "master":
-            entity = self.hass.data[const.DOMAIN]["master"]
+            entity = self.hass.data[const.DOMAIN][self.entry.entry_id]["master"]
             entity_registry.async_remove(entity.entity_id)
-            self.hass.data[const.DOMAIN]["master"] = None
+            self.hass.data[const.DOMAIN][self.entry.entry_id]["master"] = None
         else:
-            entity = self.hass.data[const.DOMAIN]["areas"][area_id]
+            entity = self.hass.data[const.DOMAIN][self.entry.entry_id]["areas"][area_id]
             entity_registry.async_remove(entity.entity_id)
-            self.hass.data[const.DOMAIN]["areas"].pop(area_id, None)
+            self.hass.data[const.DOMAIN][self.entry.entry_id]["areas"].pop(area_id, None)
 
     async def async_unload(self):
         """remove all alarmo objects"""
+        _LOGGER.debug("async_unload de Coordinator")
 
         # remove alarm_control_panel entities
-        areas = list(self.hass.data[const.DOMAIN]["areas"].keys())
+        areas = list(self.hass.data[const.DOMAIN][self.entry.entry_id]["areas"].keys())
         for area in areas:
             await self.async_remove_entity(area)
-        if self.hass.data[const.DOMAIN]["master"]:
+        if self.hass.data[const.DOMAIN][self.entry.entry_id]["master"]:
             await self.async_remove_entity("master")
 
-        del self.hass.data[const.DOMAIN]["sensor_handler"]
-        del self.hass.data[const.DOMAIN]["event_handler"]
+        del self.hass.data[const.DOMAIN][self.entry.entry_id]["automation_handler"]
+        del self.hass.data[const.DOMAIN][self.entry.entry_id]["event_handler"]
 
         # remove subscriptions for coordinator
         while len(self._subscriptions):
@@ -335,6 +305,8 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
     # ------------------------------------------------
 
     def init_device(self):
+        _LOGGER.debug("init_device de Coordinator")
+
         self.axpro.connect()
         self.load_device_info()
         self.load_zones()
@@ -356,12 +328,13 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
 
         if devices is not None:
             self.devices = {}
+
             for item in devices.list:
                 self.devices[item.zone.id] = item.zone
 
     def _update_areas(self) -> None:
         """Fetch data from axpro via sync functions."""
-        status = STATE_ALARM_DISARMED
+        status = const.STATE_ALARM_DISARMED
         status_json = self.axpro.subsystem_status()
 
         try:
@@ -382,22 +355,21 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
             for subsys in subsys_arr:
                 self.sub_systems[subsys.id] = subsys
                 if subsys.alarm:
-                    status = STATE_ALARM_TRIGGERED
+                    status = const.STATE_ALARM_TRIGGERED
                     break
                 if subsys.arming == Arming.AWAY:
-                    status = STATE_ALARM_ARMED_AWAY
+                    status = const.STATE_ALARM_ARMED_AWAY
                     break
                 if subsys.arming == Arming.STAY:
-                    status = STATE_ALARM_ARMED_HOME
+                    status = const.STATE_ALARM_ARMED_HOME
                     break
                 if subsys.arming == Arming.VACATION:
-                    status = STATE_ALARM_ARMED_VACATION
+                    status = const.STATE_ALARM_ARMED_VACATION
                     break
         except:
             _LOGGER.warning("Error getting status: %s", status_json)
 
         # _LOGGER.debug("Axpro status: %s", status)
-        self.state = status
 
     def _update_zones(self) -> None:
         """Fetch data from axpro via sync functions."""
