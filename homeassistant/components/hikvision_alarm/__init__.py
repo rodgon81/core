@@ -3,7 +3,7 @@ import asyncio
 import logging
 
 from datetime import timedelta
-from typing import Optional
+from typing import Optional, Any
 from collections.abc import Callable
 from homeassistant.core import callback
 from async_timeout import timeout
@@ -33,6 +33,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigEntry):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up hikvision_axpro from a config entry."""
+    if entry.data.get(const.CONF_HIK_ENABLE_DEBUG_OUTPUT):
+        _LOGGER.setLevel(logging.DEBUG)
+    else:
+        _LOGGER.setLevel(logging.NOTSET)
+
     _LOGGER.debug("async_setup_entry de init")
 
     store = AlarmoStorage(hass)
@@ -64,7 +69,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(const.DOMAIN, {})
     hass.data[const.DOMAIN][entry.entry_id] = {const.DATA_COORDINATOR: coordinator, const.DATA_AREAS: {}, const.DATA_MASTER: None}
 
-    await coordinator.async_update_config(entry.data)
+    await coordinator.async_update_config()
 
     # if entry.unique_id is None:
     # hass.config_entries.async_update_entry(entry, unique_id=coordinator.id, data={})
@@ -75,22 +80,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await async_register_websockets(hass)
 
     entry.async_on_unload(entry.add_update_listener(update_listener))
-
-    async def _handle_reload(service):
-        """Handle reload service call."""
-        _LOGGER.info("Service %s.reload called: reloading integration", const.DOMAIN)
-
-        current_entries = hass.config_entries.async_entries(const.DOMAIN)
-
-        reload_tasks = [hass.config_entries.async_reload(entry.entry_id) for entry in current_entries]
-
-        await asyncio.gather(*reload_tasks)
-
-    hass.helpers.service.async_register_admin_service(
-        const.DOMAIN,
-        const.SERVICE_RELOAD,
-        _handle_reload,
-    )
 
     return True
 
@@ -143,10 +132,11 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         self.zones: Optional[dict[int, Zone]] = None
         self.device_model: Optional[str] = None
         self.device_name: Optional[str] = None
+        self.device_mac: Optional[str] = None
         self.sub_systems: dict[int, SubSys] = {}
         """ Zones aka devices """
         self.devices: dict[int, ZoneConfig] = {}
-        self.id: Optional[str] = None
+        self.id: Optional[str] = entry.entry_id
         self.firmware_version: Optional[str] = None
         self.firmware_released_date: Optional[str] = None
 
@@ -177,13 +167,10 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
             async_dispatcher_send(self.hass, "alarmo_register_master", config)
 
     # llamado de websoket
-    async def async_update_config(self, data: dict):
+    async def async_update_config(self):
         _LOGGER.debug("async_update_config de Coordinator")
 
-        if data.get(const.CONF_HIK_ENABLE_DEBUG_OUTPUT):
-            _LOGGER.setLevel(logging.DEBUG)
-        else:
-            _LOGGER.setLevel(logging.NOTSET)
+        data = self.entry.data
 
         old_config = self.store.async_get_master_config()
 
@@ -304,11 +291,88 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
 
     # ------------------------------------------------
 
+    async def handle_reload(self):
+        """Handle reload service call."""
+        _LOGGER.info("Service %s.reload called: reloading integration", const.DOMAIN)
+
+        reload_task = [self.hass.config_entries.async_reload(self.entry.entry_id)]
+
+        await asyncio.gather(*reload_task)
+
+    def from_bool(self, value: Any) -> bool:
+        """Convert string value to boolean."""
+        if isinstance(value, bool):
+            return value
+
+        if not isinstance(value, str):
+            raise ValueError("invalid literal for boolean. Not a string.")
+
+        valid = {"true": True, "1": True, "false": False, "0": False}
+
+        lower_value = value.lower()
+
+        if lower_value in valid:
+            return valid[lower_value]
+        else:
+            raise ValueError('invalid literal for boolean: "%s"' % value)
+
     def init_device(self):
         _LOGGER.debug("init_device de Coordinator")
 
         self.axpro.connect()
         self.load_device_info()
+
+        areas_config = self.axpro.get_areas_config()
+
+        _LOGGER.debug("areas_config: %s", areas_config)
+
+        for val in areas_config["List"]:
+            if not self.from_bool(val["SubSys"]["enabled"]):
+                continue
+
+            data = {
+                "area_id": val["SubSys"]["id"],
+                "name": val["SubSys"]["name"],
+                "enabled": val["SubSys"]["enabled"],
+                "modes": {
+                    const.STATE_ALARM_ARMED_AWAY: {
+                        "enabled": True,
+                        "exit_time": 20,
+                        "entry_time": 30,
+                        "trigger_time": 30,
+                    },
+                    const.STATE_ALARM_ARMED_HOME: {
+                        "enabled": True,
+                        "exit_time": 20,
+                        "entry_time": 30,
+                        "trigger_time": 30,
+                    },
+                },
+            }
+
+            new_area = self.store.async_create_area(data)
+            _LOGGER.debug("new_area: %s", new_area)
+        # ----------------------------------------------------------
+        users = self.axpro.get_users()
+
+        user_id = 0
+        for user in users["UserList"]["User"]:
+            if user["userName"] == self.entry.data[const.CONF_HIK_USERNAME]:
+                user_id = user["id"]
+
+        user = self.axpro.get_config_user(user_id)
+        subSysOrZoneArm = self.from_bool(user["UserPermission"]["remotePermission"]["subSysOrZoneArm"])
+        subSysOrZoneDisarm = self.from_bool(user["UserPermission"]["remotePermission"]["subSysOrZoneDisarm"])
+        subSysOrZoneClearArm = self.from_bool(user["UserPermission"]["remotePermission"]["subSysOrZoneClearArm"])
+        zoneBypass = self.from_bool(user["UserPermission"]["remotePermission"]["zoneBypass"])
+        zoneBypassRecover = self.from_bool(user["UserPermission"]["remotePermission"]["zoneBypassRecover"])
+        # subSystemList = user["UserPermission"]["remotePermission"]["subSystemList"]
+
+        self.entry.data[const.CONF_HIK_ALARM_CONFIG][const.CONF_HIK_CODE_ARM_REQUIRED] = subSysOrZoneArm
+        self.entry.data[const.CONF_HIK_ALARM_CONFIG][const.CONF_HIK_CODE_DISARM_REQUIRED] = subSysOrZoneDisarm
+
+        _LOGGER.debug("CONF_HIK_ALARM_CONFIG: %s", self.entry.data[const.CONF_HIK_ALARM_CONFIG])
+
         self.load_zones()
         self._update_areas()
         self._update_zones()
@@ -317,7 +381,7 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         device_info = self.axpro.get_device_info()
 
         if device_info is not None:
-            self.id = device_info["DeviceInfo"]["macAddress"]
+            self.device_mac = device_info["DeviceInfo"]["macAddress"]
             self.device_name = device_info["DeviceInfo"]["deviceName"]
             self.device_model = device_info["DeviceInfo"]["model"]
             self.firmware_version = device_info["DeviceInfo"]["firmwareVersion"]
@@ -426,8 +490,3 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         if is_success:
             await self._async_update_data()
             await self.async_request_refresh()
-
-    async def test_button(self):
-        """Disarm alarm control panel."""
-
-        _LOGGER.debug("Boton apretado")

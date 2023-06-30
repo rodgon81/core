@@ -16,6 +16,8 @@ from homeassistant.const import (
     CONF_CODE,
     ATTR_CODE,
     ATTR_NAME,
+    STATE_ON,
+    STATE_OFF,
     CONF_HOST,
     CONF_USERNAME,
     CONF_PASSWORD,
@@ -44,7 +46,7 @@ DATA_COORDINATOR: Final[str] = "coordinator"
 DATA_AREAS: Final[str] = "areas"
 DATA_MASTER: Final[str] = "master"
 
-PLATFORMS: list[Platform] = [Platform.ALARM_CONTROL_PANEL, Platform.SENSOR, Platform.BUTTON]
+PLATFORMS: list[Platform] = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENSOR, Platform.BUTTON]
 
 NAME = "Alarm"
 MANUFACTURER = "Hikvision"
@@ -133,6 +135,7 @@ class Endpoints:
     Alarm_ArmHome = "/ISAPI/SecurityCP/control/arm/{}?ways=stay"
     SubSystemStatus = "/ISAPI/SecurityCP/status/subSystems"
     ZonesConfig = "/ISAPI/SecurityCP/Configuration/zones"
+    Areas_Config = "/ISAPI/SecurityCP/Configuration/subSys"
     HostStatus = "/ISAPI/SecurityCP/status/host"
     PeripheralsStatus = "/ISAPI/SecurityCP/status/exDevStatus"
     ZoneStatus = "/ISAPI/SecurityCP/status/zones"
@@ -144,6 +147,9 @@ class Endpoints:
     KeypadStatus = "/ISAPI/SecurityCP/status/keypadStatus"
     DeviceInfo = "/ISAPI/System/deviceInfo"
     systemFault = "/ISAPI/SecurityCP/status/systemFault"
+
+    get_users = "/ISAPI/Security/users"
+    get_config_user = "/ISAPI/Security/UserPermission/"
 
 
 class Method:

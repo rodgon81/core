@@ -319,7 +319,6 @@ class AlarmoBaseEntity(CoordinatorEntity, AlarmControlPanelEntity, RestoreEntity
     async def async_handle_arm_request(self, arm_mode, **kwargs):
         """check if conditions are met for starting arm procedure"""
         code = kwargs.get(const.CONF_CODE, "")
-        skip_code = kwargs.get("skip_code", False)
         skip_delay = kwargs.get(const.ATTR_SKIP_DELAY, False)
         bypass_open_sensors = kwargs.get("bypass_open_sensors", False)
         context_id = kwargs.get("context_id", None)
@@ -609,12 +608,12 @@ class AlarmoMasterEntity(AlarmoBaseEntity):
 
         open_sensors = {}
 
-        for item in self.hass.data[const.DOMAIN][self.entry_id][const.DATA_AREAS].values():
-            if (item.state in const.ARM_MODES and item.arm_mode != arm_mode) or item.state == const.STATE_ALARM_DISARMED:
-                res = await item.async_arm(arm_mode, skip_delay=skip_delay, bypass_open_sensors=bypass_open_sensors)
+        # for item in self.hass.data[const.DOMAIN][self.entry_id][const.DATA_AREAS].values():
+        # if (item.state in const.ARM_MODES and item.arm_mode != arm_mode) or item.state == const.STATE_ALARM_DISARMED:
+        # res = await item.async_arm(arm_mode, skip_delay=skip_delay, bypass_open_sensors=bypass_open_sensors)
 
-                if not res:
-                    open_sensors.update(item.open_sensors)
+        # if not res:
+        # open_sensors.update(item.open_sensors)
 
         if open_sensors:
             await self.async_arm_failure(open_sensors, context_id=context_id)
@@ -769,9 +768,11 @@ class AlarmoAreaEntity(AlarmoBaseEntity):
         if skip_delay or not exit_delay:
             # immediate arm event
 
-            (open_sensors, bypassed_sensors) = self.hass.data[const.DOMAIN][self.entry_id]["sensor_handler"].validate_arming_event(
-                area_id=self.area_id, target_state=arm_mode, bypass_open_sensors=bypass_open_sensors
-            )
+            open_sensors = ""
+            bypassed_sensors = False
+            # (open_sensors, bypassed_sensors) = self.hass.data[const.DOMAIN][self.entry_id]["sensor_handler"].validate_arming_event(
+            #   area_id=self.area_id, target_state=arm_mode, bypass_open_sensors=bypass_open_sensors
+            # )
 
             if open_sensors:
                 # there where errors -> abort the arm
@@ -796,12 +797,15 @@ class AlarmoAreaEntity(AlarmoBaseEntity):
                 return True
 
         else:  # normal arm event (from disarmed via arming)
-            (open_sensors, _bypassed_sensors) = self.hass.data[const.DOMAIN][self.entry_id]["sensor_handler"].validate_arming_event(
-                area_id=self.area_id,
-                target_state=arm_mode,
-                use_delay=True,
-                bypass_open_sensors=bypass_open_sensors,
-            )
+            open_sensors = ""
+            bypassed_sensors = False
+
+            # (open_sensors, _bypassed_sensors) = self.hass.data[const.DOMAIN][self.entry_id]["sensor_handler"].validate_arming_event(
+            #   area_id=self.area_id,
+            #  target_state=arm_mode,
+            #    use_delay=True,
+            #   bypass_open_sensors=bypass_open_sensors,
+            # )
 
             if open_sensors:
                 # there where errors -> abort the arm

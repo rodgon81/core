@@ -52,5 +52,55 @@
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
     }
+  },
+  "entity": {
+    "button": {
+      "reload_hikvision": {
+        "name": "Nombre externo"
+      },
+      "test": {
+        "name": "Nombre test"
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "Temperatura"
+      },
+      "humidity": {
+        "name": "Humedad"
+      },
+      "battery": {
+        "name": "Bateria"
+      },
+      "signal": {
+        "name": "Señal"
+      },
+      "status": {
+        "name": "Estado"
+      }
+    },
+    "binary_sensor": {
+      "magnet_presence": {
+        "name": "Magnetico"
+      },
+      "tamper_evident": {
+        "name": "Tamper"
+      },
+      "bypassed": {
+        "name": "Biapaseado"
+      },
+      "armed": {
+        "name": "Armado"
+      },
+      "alarm": {
+        "name": "Alarma"
+      },
+      "stay_away": {
+        "name": "Stay Away"
+      },
+      "is_via_repeater": {
+        "name": "Is via repeater"
+      }
+    }
   }
 }

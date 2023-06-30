@@ -71,15 +71,17 @@ def websocket_get_alarm_entities(hass, connection, msg):
 def websocket_get_countdown(hass, connection, msg):
     """Publish countdown time for alarm entity."""
     entity_id = msg["entity_id"]
+    result = ""
 
-    item = next((entity for entity in hass.data[const.DOMAIN][0][const.DATA_AREAS].values() if entity.entity_id == entity_id), None)
+    for (key, val) in hass.data[const.DOMAIN].items():
+        item = next((entity for entity in val[const.DATA_AREAS].values() if entity.entity_id == entity_id), None)
 
-    if hass.data[const.DOMAIN][0][const.DATA_MASTER] and not item and hass.data[const.DOMAIN][0][const.DATA_MASTER].entity_id == entity_id:
-        item = hass.data[const.DOMAIN][0][const.DATA_MASTER]
+        if val[const.DATA_MASTER] and not item and val[const.DATA_MASTER].entity_id == entity_id:
+            item = val[const.DATA_MASTER]
 
-    data = {"delay": item.delay if item else 0, "remaining": round((item.expiration - dt_util.utcnow()).total_seconds(), 2) if item and item.expiration else 0}
+        result = {"delay": item.delay if item else 0, "remaining": round((item.expiration - dt_util.utcnow()).total_seconds(), 2) if item and item.expiration else 0}
 
-    connection.send_result(msg["id"], data)
+    connection.send_result(msg["id"], result)
 
 
 async def async_register_websockets(hass):

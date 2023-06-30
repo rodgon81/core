@@ -246,8 +246,21 @@ class HikAx:
     def repeater_status(self):
         return self._base_request(f"http://{self.host}{Endpoints.RepeaterStatus}")
 
+    def get_areas_config(self):
+        return self._base_request(f"http://{self.host}{Endpoints.Areas_Config}")
+
     def get_device_info(self):
         response = self._base_request(f"http://{self.host}{Endpoints.DeviceInfo}", is_json=False)
+
+        return xmltodict.parse(response)
+
+    def get_users(self):
+        response = self._base_request(f"http://{self.host}{Endpoints.get_users}", is_json=False)
+
+        return xmltodict.parse(response)
+
+    def get_config_user(self, user_id):
+        response = self._base_request(f"http://{self.host}{Endpoints.get_config_user}{user_id}", is_json=False)
 
         return xmltodict.parse(response)
 

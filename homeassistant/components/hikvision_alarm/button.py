@@ -1,55 +1,60 @@
 from __future__ import annotations
-import logging
 from homeassistant.config_entries import ConfigEntry
+from collections.abc import Callable, Coroutine
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers import device_registry as dr
-from homeassistant.components.button import ButtonEntity
+from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.const import EntityCategory
+from dataclasses import dataclass
 
 from . import HikAxProDataUpdateCoordinator
-from . import const
+from .const import DOMAIN, DATA_COORDINATOR
+from .entity import HikvisionAlarmEntity
 
-_LOGGER = logging.getLogger(__name__)
+
+@dataclass
+class HikAlarmButtonDescriptionMixin:
+    """Mixin to describe a Hikvision Alarm Button entity."""
+
+    press_action: Callable[[HikAxProDataUpdateCoordinator], Coroutine]
+
+
+@dataclass
+class HikAlarmButtonDescription(ButtonEntityDescription, HikAlarmButtonDescriptionMixin):
+    """Hikvision Alarm Button description."""
+
+
+BUTTONS: tuple[HikAlarmButtonDescription, ...] = (
+    HikAlarmButtonDescription(
+        key="reload_hikvision",
+        translation_key="reload_hikvision",
+        icon="mdi:reload",
+        entity_category=EntityCategory.CONFIG,
+        press_action=lambda coordinator: coordinator.handle_reload(),
+    ),
+    HikAlarmButtonDescription(
+        key="test",
+        translation_key="test",
+        icon="mdi:reload",
+        entity_category=EntityCategory.CONFIG,
+        press_action=lambda coordinator: coordinator.handle_reload(),
+    ),
+)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
+    coordinator: HikAxProDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
 
-    async_add_entities([NanoleafIdentifyButton(coordinator)])
+    async_add_entities(HikAlarmButton(coordinator, description) for description in BUTTONS)
 
 
-class NanoleafIdentifyButton(CoordinatorEntity, ButtonEntity):
-    """Representation of a Nanoleaf identify button."""
+class HikAlarmButton(HikvisionAlarmEntity, ButtonEntity):
+    """Representation of a Hikvision Alarm button."""
 
-    coordinator: HikAxProDataUpdateCoordinator
-    _attr_unique_id = f"boton_prueba_identify"
-    _attr_name = f"Identify Boton Prueba"
-    _attr_icon = "mdi:magnify"
-    _attr_entity_category = EntityCategory.CONFIG
+    def __init__(self, coordinator: HikAxProDataUpdateCoordinator, description: HikAlarmButtonDescription):
+        self.entity_description: HikAlarmButtonDescription = description
 
-    def __init__(self, coordinator: HikAxProDataUpdateCoordinator):
-        super().__init__(coordinator=coordinator)
-        self.coordinator = coordinator
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info for this device."""
-        return DeviceInfo(identifiers={(const.DOMAIN, self.unique_id)})
-
-    @property
-    def unique_id(self):
-        """Return a unique id."""
-        return self.coordinator.id
-
-    @property
-    def name(self):
-        """Return the name."""
-        return "boton tttttt"
-        # "HikvisionAxPro"
+        super().__init__(coordinator, description.key)
 
     async def async_press(self) -> None:
-        """Identify the Nanoleaf."""
-        await self.coordinator.test_button()
+        await self.entity_description.press_action(self.coordinator)

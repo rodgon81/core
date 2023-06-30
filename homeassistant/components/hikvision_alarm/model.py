@@ -135,7 +135,7 @@ def detector_model_to_name(model_id: Optional[str]) -> str:
         return "Wireless PIR AM Curtain Detector"
     if model_id is not None:
         return str(model_id)
-    return "Unknown"
+    return "Hikvision"
 
 
 @dataclass

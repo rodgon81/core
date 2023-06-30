@@ -35,6 +35,7 @@ class AreaEntry:
 
     area_id = attr.ib(type=str, default=None)
     name = attr.ib(type=str, default=None)
+    enabled = attr.ib(type=bool, default=False)
     modes = attr.ib(
         type=[str, ModeEntry],
         default={
@@ -240,47 +241,25 @@ class AlarmoStorage:
     @callback
     def async_get_area(self, area_id) -> AreaEntry:
         """Get an existing AreaEntry by id."""
-        # res = self.areas.get(area_id)
-        # return attr.asdict(res) if res else None
+        res = self.areas.get(area_id)
 
-        options: dict = {}
-        options["enabled"] = True
-        options["exit_time"] = 20
-        options["entry_time"] = 30
-        options["trigger_time"] = 30
-
-        modes: dict = {}
-        modes[const.STATE_ALARM_ARMED_AWAY] = options
-        modes[const.STATE_ALARM_ARMED_HOME] = options
-
-        config: dict = {}
-        config["area_id"] = area_id
-        config["name"] = f"Area{area_id}"
-        config["modes"] = modes
-
-        return config
+        return attr.asdict(res)
 
     @callback
     def async_get_areas(self):
         """Get an existing AreaEntry by id."""
-        # res = {}
-        # for (key, val) in self.areas.items():
-        # res[key] = attr.asdict(val)
-        # return res
+        res = {}
+        for (key, val) in self.areas.items():
+            res[key] = attr.asdict(val)
 
-        areas = {}
-        areas[1] = self.async_get_area(1)
-        areas[2] = self.async_get_area(2)
-        areas[3] = self.async_get_area(3)
-        areas[4] = self.async_get_area(4)
-        return areas
+        return res
 
     @callback
     def async_create_area(self, data: dict) -> AreaEntry:
         """Create a new AreaEntry."""
-        area_id = str(int(time.time()))
-        new_area = AreaEntry(**data, area_id=area_id)
-        self.areas[area_id] = new_area
+        new_area = AreaEntry(**data)
+
+        self.areas[new_area.area_id] = new_area
 
         return attr.asdict(new_area)
 
