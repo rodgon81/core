@@ -11,6 +11,8 @@ from homeassistant.helpers import device_registry as dr
 from collections.abc import Callable
 from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass, DOMAIN as BINARY_SENSOR_DOMAIN, BinarySensorEntityDescription, STATE_ON, STATE_OFF
 from dataclasses import dataclass
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+
 
 from . import HikAxProDataUpdateCoordinator
 from . import const
@@ -133,53 +135,63 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
 
-    devices = []
+    @callback
+    def async_add_alarm_zone_binary_sensor_entity():
+        devices = []
 
-    await coordinator.async_request_refresh()
+        # await coordinator.async_request_refresh()
 
-    if coordinator.zone_status is not None:
-        for zone in coordinator.zone_status.zone_list:
-            zone_config = coordinator.devices.get(zone.zone.id)
+        if coordinator.zone_status is not None:
+            for zone in coordinator.zone_status.zone_list:
+                zone_config = coordinator.devices.get(zone.zone.id)
 
-            # _LOGGER.debug("Adding device with zone config: %s", zone)
-            # _LOGGER.debug("+ config: %s", zone_config)
+                # _LOGGER.debug("Adding device with zone config: %s", zone)
+                # _LOGGER.debug("+ config: %s", zone_config)
 
-            device_registry = dr.async_get(hass)
-            device_registry.async_get_or_create(
-                config_entry_id=entry.entry_id,
-                identifiers={(const.DOMAIN, str(entry.entry_id) + "-" + str(zone_config.id))},
-                manufacturer="HikVision",
-                name=zone_config.zone_name,
-                via_device=(const.DOMAIN, str(coordinator.id)),
-                model=detector_model_to_name(zone.zone.model),
-            )
+                device_registry = dr.async_get(hass)
+                device_registry.async_get_or_create(
+                    config_entry_id=entry.entry_id,
+                    identifiers={(const.DOMAIN, str(entry.entry_id) + "-" + str(zone_config.id))},
+                    manufacturer="HikVision",
+                    name=zone_config.zone_name,
+                    via_device=(const.DOMAIN, str(coordinator.id)),
+                    model=detector_model_to_name(zone.zone.model),
+                )
 
-            detector_type: DetectorType | None
-            detector_type = zone_config.detector_type
+                detector_type: DetectorType | None
+                detector_type = zone_config.detector_type
 
-            # Specific entity
-            if detector_type == DetectorType.WIRELESS_EXTERNAL_MAGNET_DETECTOR:
-                devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["magnet_presence"]))
-            if detector_type == DetectorType.DOOR_MAGNETIC_CONTACT_DETECTOR or detector_type == DetectorType.SLIM_MAGNETIC_CONTACT or detector_type == DetectorType.MAGNET_SHOCK_DETECTOR:
-                devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["magnet_presence"]))
+                # Specific entity
+                if detector_type == DetectorType.WIRELESS_EXTERNAL_MAGNET_DETECTOR:
+                    devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["magnet_presence"]))
+                if detector_type == DetectorType.DOOR_MAGNETIC_CONTACT_DETECTOR or detector_type == DetectorType.SLIM_MAGNETIC_CONTACT or detector_type == DetectorType.MAGNET_SHOCK_DETECTOR:
+                    devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["magnet_presence"]))
 
-            if zone.zone.tamper_evident is not None:
-                devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["tamper_evident"]))
-            if zone.zone.bypassed is not None:
-                devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["bypassed"]))
-            if zone.zone.armed is not None:
-                devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["armed"]))
-            if zone.zone.alarm is not None:
-                devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["alarm"]))
-            if zone.zone.stay_away is not None:
-                devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["stay_away"]))
-            if zone.zone.is_via_repeater is not None:
-                devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["is_via_repeater"]))
+                if zone.zone.tamper_evident is not None:
+                    devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["tamper_evident"]))
+                if zone.zone.bypassed is not None:
+                    devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["bypassed"]))
+                if zone.zone.armed is not None:
+                    devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["armed"]))
+                if zone.zone.alarm is not None:
+                    devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["alarm"]))
+                if zone.zone.stay_away is not None:
+                    devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["stay_away"]))
+                if zone.zone.is_via_repeater is not None:
+                    devices.append(HikBinarySensor(coordinator, zone.zone, BINARY_SENSORS_ZONE["is_via_repeater"]))
 
-    # _LOGGER.debug("devices: %s", devices)
-    async_add_entities(devices, False)
+        # _LOGGER.debug("devices: %s", devices)
+        async_add_entities(devices, False)
 
-    async_add_entities(HikAlarmBinarySensor(coordinator, description) for description in BINARY_SENSORS)
+    async_dispatcher_connect(hass, "alarmo_register_zone_binary_sensor_entity", async_add_alarm_zone_binary_sensor_entity)
+
+    @callback
+    def async_add_alarm_entity_binary_sensor_entity():
+        async_add_entities(HikAlarmBinarySensor(coordinator, description) for description in BINARY_SENSORS)
+
+    async_dispatcher_connect(hass, "alarmo_register_entity_binary_sensor_entity", async_add_alarm_entity_binary_sensor_entity)
+
+    async_dispatcher_send(hass, "hik_binary_sensor_platform_loaded")
 
 
 class HikBinarySensor(HikZoneEntity, BinarySensorEntity):

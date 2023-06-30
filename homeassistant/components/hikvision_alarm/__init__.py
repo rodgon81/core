@@ -140,7 +140,10 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         self.firmware_version: Optional[str] = None
         self.firmware_released_date: Optional[str] = None
 
-        self._subscriptions.append(async_dispatcher_connect(hass, "alarmo_platform_loaded", self.setup_alarm_entities))
+        self._subscriptions.append(async_dispatcher_connect(hass, "hik_alarm_control_platform_loaded", self.setup_alarm_control_platform_entities))
+        self._subscriptions.append(async_dispatcher_connect(hass, "hik_button_platform_loaded", self.setup_button_platform_entities))
+        self._subscriptions.append(async_dispatcher_connect(hass, "hik_binary_sensor_platform_loaded", self.setup_binary_sensor_platform_entities))
+        self._subscriptions.append(async_dispatcher_connect(hass, "hik_sensor_platform_loaded", self.setup_sensor_platform_entities))
 
         super().__init__(hass, _LOGGER, name=const.DOMAIN, update_interval=timedelta(seconds=self.entry.data[const.CONF_HIK_SCAN_INTERVAL]))
 
@@ -165,6 +168,25 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
 
         if len(areas) > 1 and config[const.CONF_HIK_ENABLED]:
             async_dispatcher_send(self.hass, "alarmo_register_master", config)
+
+    @callback
+    def setup_button_platform_entities(self):
+        _LOGGER.debug("setup_button_platform_entities de Coordinator")
+
+        async_dispatcher_send(self.hass, "alarmo_register_zone_button_entity")
+
+    @callback
+    def setup_binary_sensor_platform_entities(self):
+        _LOGGER.debug("setup_binary_sensor_platform_entities de Coordinator")
+
+        async_dispatcher_send(self.hass, "alarmo_register_zone_binary_sensor_entity")
+        async_dispatcher_send(self.hass, "alarmo_register_entity_binary_sensor_entity")
+
+    @callback
+    def setup_sensor_platform_entities(self):
+        _LOGGER.debug("setup_sensor_platform_entities de Coordinator")
+
+        async_dispatcher_send(self.hass, "alarmo_register_zone_sensor_entity")
 
     # llamado de websoket
     async def async_update_config(self):

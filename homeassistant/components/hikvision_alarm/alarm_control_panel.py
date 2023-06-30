@@ -61,7 +61,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     async_dispatcher_connect(hass, "alarmo_register_master", async_add_alarm_master)
 
     # este desencadena las llamadas internas que se haces desde el init
-    async_dispatcher_send(hass, "alarmo_platform_loaded")
+    async_dispatcher_send(hass, "hik_alarm_control_platform_loaded")
 
     # Register services
     platform = entity_platform.current_platform.get()
