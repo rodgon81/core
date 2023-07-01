@@ -4,7 +4,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import HikAxProDataUpdateCoordinator
 from .const import MANUFACTURER, DOMAIN
-from .model import Zone
 
 
 class HikvisionAlarmEntity(CoordinatorEntity[HikAxProDataUpdateCoordinator]):
@@ -28,19 +27,17 @@ class HikvisionAlarmEntity(CoordinatorEntity[HikAxProDataUpdateCoordinator]):
 
 
 class HikZoneEntity(CoordinatorEntity[HikAxProDataUpdateCoordinator]):
-    zone: Zone
-
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, type: str, domain: str) -> None:
+    def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone_id: int, type: str, domain: str) -> None:
         """Initialize the entity."""
         super().__init__(coordinator)
 
-        self.zone = zone
+        self.zone_id: int = zone_id
 
-        self._attr_unique_id = f"{coordinator.id}_{type}_Zone_{self.zone.id}"
+        self._attr_unique_id = f"{coordinator.id}_{type}_Zone_{self.zone_id}"
 
-        zone_id = self.zone.id + 1
+        zone_id = self.zone_id + 1
         zone_id_str: str = zone_id
 
         if zone_id < 10:
@@ -49,9 +46,5 @@ class HikZoneEntity(CoordinatorEntity[HikAxProDataUpdateCoordinator]):
         self.entity_id = f"{domain}.{coordinator.device_name}-{type}-Zone_{zone_id_str}"
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, str(coordinator.id) + "-" + str(self.zone.id))},
-            manufacturer=MANUFACTURER,
-            name=self.zone.name,
-            model=self.zone.model,
-            sw_version=self.zone.version,
+            identifiers={(DOMAIN, str(coordinator.id) + "-" + str(self.zone_id))},
         )

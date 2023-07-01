@@ -56,16 +56,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _LOGGER.debug("Despues del init device, y ahora registramos el device")
 
-    device_registry = dr.async_get(hass)
-    device_registry.async_get_or_create(
-        config_entry_id=entry.entry_id,
-        identifiers={(const.DOMAIN, coordinator.id)},
-        manufacturer=const.MANUFACTURER,
-        name=coordinator.device_name,
-        model=coordinator.device_model,
-        sw_version=coordinator.firmware_version,
-    )
-
     hass.data.setdefault(const.DOMAIN, {})
     hass.data[const.DOMAIN][entry.entry_id] = {const.DATA_COORDINATOR: coordinator, const.DATA_AREAS: {}, const.DATA_MASTER: None}
 
@@ -148,8 +138,9 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         super().__init__(hass, _LOGGER, name=const.DOMAIN, update_interval=timedelta(seconds=self.entry.data[const.CONF_HIK_SCAN_INTERVAL]))
 
     @callback
-    def setup_alarm_entities(self):
+    def setup_alarm_control_platform_entities(self):
         _LOGGER.debug("setup_alarm_entities de Coordinator")
+
         self.hass.data[const.DOMAIN][self.entry.entry_id]["automation_handler"] = AutomationHandler(self.hass, self.entry.entry_id)
         self.hass.data[const.DOMAIN][self.entry.entry_id]["event_handler"] = EventHandler(self.hass, self.entry.entry_id)
 
@@ -179,18 +170,64 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
     def setup_binary_sensor_platform_entities(self):
         _LOGGER.debug("setup_binary_sensor_platform_entities de Coordinator")
 
-        async_dispatcher_send(self.hass, "alarmo_register_zone_binary_sensor_entity")
+        if self.zone_status is not None:
+            for zone in self.zone_status.zone_list:
+                zone_config = self.devices.get(zone.zone.id)
+
+                if zone.zone.tamper_evident is not None:
+                    async_dispatcher_send(self.hass, "alarmo_register_zone_binary_sensor_entity", zone.zone, "tamper_evident")
+                if zone.zone.shielded is not None:
+                    async_dispatcher_send(self.hass, "alarmo_register_zone_binary_sensor_entity", zone.zone, "shielded")
+                if zone.zone.bypassed is not None:
+                    async_dispatcher_send(self.hass, "alarmo_register_zone_binary_sensor_entity", zone.zone, "bypassed")
+                if zone.zone.armed is not None:
+                    async_dispatcher_send(self.hass, "alarmo_register_zone_binary_sensor_entity", zone.zone, "armed")
+                if zone.zone.alarm is not None:
+                    async_dispatcher_send(self.hass, "alarmo_register_zone_binary_sensor_entity", zone.zone, "alarm")
+
         async_dispatcher_send(self.hass, "alarmo_register_entity_binary_sensor_entity")
 
     @callback
     def setup_sensor_platform_entities(self):
         _LOGGER.debug("setup_sensor_platform_entities de Coordinator")
 
-        async_dispatcher_send(self.hass, "alarmo_register_zone_sensor_entity")
+        if self.zone_status is not None:
+            for zone in self.zone_status.zone_list:
+                zone_config = self.devices.get(zone.zone.id)
+
+                if zone.zone.status is not None:
+                    async_dispatcher_send(self.hass, "alarmo_register_zone_sensor_entity", zone.zone, "status")
+                if zone.zone.zone_type is not None:
+                    async_dispatcher_send(self.hass, "alarmo_register_zone_sensor_entity", zone.zone, "zone_type")
+                if zone.zone.signal is not None and zone_config.module_type == "localWired":
+                    async_dispatcher_send(self.hass, "alarmo_register_zone_sensor_entity", zone.zone, "signal")
 
     # llamado de websoket
     async def async_update_config(self):
         _LOGGER.debug("async_update_config de Coordinator")
+
+        device_registry = dr.async_get(self.hass)
+        device_registry.async_get_or_create(
+            config_entry_id=self.entry.entry_id,
+            identifiers={(const.DOMAIN, self.id)},
+            manufacturer=const.MANUFACTURER,
+            name=self.device_name,
+            model=self.device_model,
+            sw_version=self.firmware_version,
+        )
+
+        if self.zone_status is not None:
+            for zone in self.zone_status.zone_list:
+                zone_config = self.devices.get(zone.zone.id)
+
+                device_registry = dr.async_get(self.hass)
+                device_registry.async_get_or_create(
+                    config_entry_id=self.entry.entry_id,
+                    identifiers={(const.DOMAIN, str(self.entry.entry_id) + "-" + str(zone_config.id))},
+                    manufacturer=const.MANUFACTURER,
+                    name=zone_config.zone_name,
+                    via_device=(const.DOMAIN, str(self.id)),
+                )
 
         data = self.entry.data
 

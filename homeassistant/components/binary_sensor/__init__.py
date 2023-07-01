@@ -155,9 +155,7 @@ DEVICE_CLASS_WINDOW = BinarySensorDeviceClass.WINDOW.value
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Track states and offer events for binary sensors."""
-    component = hass.data[DOMAIN] = EntityComponent[BinarySensorEntity](
-        logging.getLogger(__name__), DOMAIN, hass, SCAN_INTERVAL
-    )
+    component = hass.data[DOMAIN] = EntityComponent[BinarySensorEntity](logging.getLogger(__name__), DOMAIN, hass, SCAN_INTERVAL)
 
     await component.async_setup(config)
     return True

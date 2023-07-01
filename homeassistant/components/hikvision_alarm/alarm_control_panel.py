@@ -27,16 +27,6 @@ from . import HikAxProDataUpdateCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup(hass, config):
-    """Track states and offer events for alarm_control_panel."""
-    return True
-
-
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    """Set up the platform from config."""
-    return True
-
-
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up a Hikvision ax pro alarm control panel based on a config entry."""
 
