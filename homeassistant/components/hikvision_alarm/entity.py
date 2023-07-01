@@ -2,16 +2,16 @@
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import HikAxProDataUpdateCoordinator
+from . import HikAlarmDataUpdateCoordinator
 from .const import MANUFACTURER, DOMAIN
 
 
-class HikvisionAlarmEntity(CoordinatorEntity[HikAxProDataUpdateCoordinator]):
+class HikAlarmEntity(CoordinatorEntity[HikAlarmDataUpdateCoordinator]):
     """BraviaTV entity class."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: HikAxProDataUpdateCoordinator, key: str) -> None:
+    def __init__(self, coordinator: HikAlarmDataUpdateCoordinator, key: str) -> None:
         """Initialize the entity."""
         super().__init__(coordinator)
 
@@ -26,10 +26,10 @@ class HikvisionAlarmEntity(CoordinatorEntity[HikAxProDataUpdateCoordinator]):
         )
 
 
-class HikZoneEntity(CoordinatorEntity[HikAxProDataUpdateCoordinator]):
+class HikZoneEntity(CoordinatorEntity[HikAlarmDataUpdateCoordinator]):
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone_id: int, type: str, domain: str) -> None:
+    def __init__(self, coordinator: HikAlarmDataUpdateCoordinator, zone_id: int, type: str, domain: str) -> None:
         """Initialize the entity."""
         super().__init__(coordinator)
 

@@ -22,7 +22,7 @@ from homeassistant.components.alarm_control_panel import AlarmControlPanelEntity
 from homeassistant.util import slugify
 
 from . import const
-from . import HikAxProDataUpdateCoordinator
+from . import HikAlarmDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up a Hikvision ax pro alarm control panel based on a config entry."""
 
-    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
+    coordinator: HikAlarmDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
 
     @callback
     def async_add_alarm_entity(config: dict):
@@ -71,7 +71,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class AlarmoBaseEntity(CoordinatorEntity, AlarmControlPanelEntity, RestoreEntity):
-    def __init__(self, hass: HomeAssistant, name: str, coordinator: HikAxProDataUpdateCoordinator, entry_id) -> None:
+    def __init__(self, hass: HomeAssistant, name: str, coordinator: HikAlarmDataUpdateCoordinator, entry_id) -> None:
         """Initialize the alarm_control_panel entity."""
 
         self.entity_id = "{}.{}".format(PLATFORM, slugify(name))
@@ -420,7 +420,7 @@ class AlarmoBaseEntity(CoordinatorEntity, AlarmControlPanelEntity, RestoreEntity
 class AlarmoMasterEntity(AlarmoBaseEntity):
     """Representation of Hikvision Ax Pro alarm panel."""
 
-    def __init__(self, hass: HomeAssistant, name: str, coordinator: HikAxProDataUpdateCoordinator, entry_id) -> None:
+    def __init__(self, hass: HomeAssistant, name: str, coordinator: HikAlarmDataUpdateCoordinator, entry_id) -> None:
         """Initialize the alarm_control_panel entity."""
         super().__init__(hass, name, coordinator, entry_id)
         self.area_id = None
@@ -642,7 +642,7 @@ class AlarmoMasterEntity(AlarmoBaseEntity):
 class AlarmoAreaEntity(AlarmoBaseEntity):
     """Representation of Hikvision Ax Pro alarm panel."""
 
-    def __init__(self, hass: HomeAssistant, name: str, area_id: str, coordinator: HikAxProDataUpdateCoordinator, entry_id) -> None:
+    def __init__(self, hass: HomeAssistant, name: str, area_id: str, coordinator: HikAlarmDataUpdateCoordinator, entry_id) -> None:
         """Initialize the alarm_control_panel entity."""
         super().__init__(hass, name, coordinator, entry_id)
 

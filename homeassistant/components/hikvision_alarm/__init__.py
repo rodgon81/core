@@ -22,6 +22,9 @@ from .store import AlarmoStorage
 from .automations import AutomationHandler
 from .event import EventHandler
 
+from .api_class import ModuleType
+
+
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.setLevel(logging.DEBUG)
 
@@ -44,7 +47,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     axpro = HikAx(entry.data[const.CONF_HIK_HOST], entry.data[const.CONF_HIK_USERNAME], entry.data[const.CONF_HIK_PASSWORD])
 
-    coordinator = HikAxProDataUpdateCoordinator(store, hass, axpro, entry)
+    coordinator = HikAlarmDataUpdateCoordinator(store, hass, axpro, entry)
 
     _LOGGER.debug("Antes del init device y 10seg timeout")
 
@@ -83,7 +86,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not unload_ok:
         return False
 
-    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
+    coordinator: HikAlarmDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
     await coordinator.async_unload()
 
     hass.data[const.DOMAIN].pop(entry.entry_id)
@@ -95,7 +98,7 @@ async def async_remove_entry(hass, entry):
     """Remove Alarmo config entry."""
     _LOGGER.debug("async_remove_entry de init")
 
-    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
+    coordinator: HikAlarmDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
     await coordinator.async_delete_config()
 
     del hass.data[const.DOMAIN]
@@ -108,11 +111,11 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry):
     await hass.config_entries.async_reload(config_entry.entry_id)
 
 
-class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
+class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching ax pro data."""
 
     def __init__(self, store, hass, axpro: HikAx, entry: ConfigEntry):
-        _LOGGER.debug("__init__ HikAxProDataUpdateCoordinator")
+        _LOGGER.debug("__init__ HikAlarmDataUpdateCoordinator")
         self.hass: HomeAssistant = hass
         self.store: AlarmoStorage = store
         self.axpro: HikAx = axpro
@@ -129,6 +132,11 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         self.id: Optional[str] = entry.entry_id
         self.firmware_version: Optional[str] = None
         self.firmware_released_date: Optional[str] = None
+        self.batery: Optional[int] = 100
+        self.wifi_state: Optional[bool] = False
+        self.movile_net_state: Optional[bool] = True
+        self.ethernet_state: Optional[bool] = True
+        self.batery_state: Optional[str] = "100%"
 
         self._subscriptions.append(async_dispatcher_connect(hass, "hik_alarm_control_platform_loaded", self.setup_alarm_control_platform_entities))
         self._subscriptions.append(async_dispatcher_connect(hass, "hik_button_platform_loaded", self.setup_button_platform_entities))
@@ -164,7 +172,7 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
     def setup_button_platform_entities(self):
         _LOGGER.debug("setup_button_platform_entities de Coordinator")
 
-        async_dispatcher_send(self.hass, "alarmo_register_zone_button_entity")
+        async_dispatcher_send(self.hass, "hik_register_alarm_button")
 
     @callback
     def setup_binary_sensor_platform_entities(self):
@@ -175,17 +183,17 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
                 zone_config = self.devices.get(zone.zone.id)
 
                 if zone.zone.tamper_evident is not None:
-                    async_dispatcher_send(self.hass, "alarmo_register_zone_binary_sensor_entity", zone.zone, "tamper_evident")
+                    async_dispatcher_send(self.hass, "hik_register_zone_binary_sensor", zone.zone, "tamper_evident")
                 if zone.zone.shielded is not None:
-                    async_dispatcher_send(self.hass, "alarmo_register_zone_binary_sensor_entity", zone.zone, "shielded")
+                    async_dispatcher_send(self.hass, "hik_register_zone_binary_sensor", zone.zone, "shielded")
                 if zone.zone.bypassed is not None:
-                    async_dispatcher_send(self.hass, "alarmo_register_zone_binary_sensor_entity", zone.zone, "bypassed")
+                    async_dispatcher_send(self.hass, "hik_register_zone_binary_sensor", zone.zone, "bypassed")
                 if zone.zone.armed is not None:
-                    async_dispatcher_send(self.hass, "alarmo_register_zone_binary_sensor_entity", zone.zone, "armed")
+                    async_dispatcher_send(self.hass, "hik_register_zone_binary_sensor", zone.zone, "armed")
                 if zone.zone.alarm is not None:
-                    async_dispatcher_send(self.hass, "alarmo_register_zone_binary_sensor_entity", zone.zone, "alarm")
+                    async_dispatcher_send(self.hass, "hik_register_zone_binary_sensor", zone.zone, "alarm")
 
-        async_dispatcher_send(self.hass, "alarmo_register_entity_binary_sensor_entity")
+        async_dispatcher_send(self.hass, "hik_register_alarm_binary_sensor")
 
     @callback
     def setup_sensor_platform_entities(self):
@@ -196,11 +204,13 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
                 zone_config = self.devices.get(zone.zone.id)
 
                 if zone.zone.status is not None:
-                    async_dispatcher_send(self.hass, "alarmo_register_zone_sensor_entity", zone.zone, "status")
+                    async_dispatcher_send(self.hass, "hik_register_zone_sensor", zone.zone, "status")
                 if zone.zone.zone_type is not None:
-                    async_dispatcher_send(self.hass, "alarmo_register_zone_sensor_entity", zone.zone, "zone_type")
-                if zone.zone.signal is not None and zone_config.module_type == "localWired":
-                    async_dispatcher_send(self.hass, "alarmo_register_zone_sensor_entity", zone.zone, "signal")
+                    async_dispatcher_send(self.hass, "hik_register_zone_sensor", zone.zone, "zone_type")
+                if zone.zone.signal is not None and zone_config.module_type is ModuleType.EXTEND_WIRELESS:
+                    async_dispatcher_send(self.hass, "hik_register_zone_sensor", zone.zone, "signal")
+
+        async_dispatcher_send(self.hass, "hik_register_alarm_sensor")
 
     # llamado de websoket
     async def async_update_config(self):
@@ -349,6 +359,31 @@ class HikAxProDataUpdateCoordinator(DataUpdateCoordinator):
         await self.store.async_delete()
 
     # ------------------------------------------------
+
+    async def get_mac(self):
+        """Handle reload service call."""
+        _LOGGER.info("get_mac")
+        return self.device_mac
+
+    async def get_batery(self):
+        """Handle reload service call."""
+        _LOGGER.info("get_batery")
+        return "100%"
+
+    async def get_wifi_state(self):
+        """Handle reload service call."""
+        _LOGGER.info("get_wifi_state")
+        return False  # self.batery
+
+    async def get_movile_net_state(self):
+        """Handle reload service call."""
+        _LOGGER.info("get_movile_net_state")
+        return True  # self.batery
+
+    async def get_ethernet_state(self):
+        """Handle reload service call."""
+        _LOGGER.info("get_ethernet_state")
+        return True  # self.batery
 
     async def handle_reload(self):
         """Handle reload service call."""

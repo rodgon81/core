@@ -56,35 +56,41 @@
   "entity": {
     "button": {
       "reload_hikvision": {
-        "name": "Nombre externo"
-      },
-      "test": {
-        "name": "Nombre test"
+        "name": "Recargar configuración"
       }
     },
     "sensor": {
-      "temperature": {
-        "name": "Temperatura"
+      "status": {
+        "name": "Estado"
       },
-      "humidity": {
-        "name": "Humedad"
-      },
-      "battery": {
-        "name": "Bateria"
+      "zone_type": {
+        "name": "Tipo de zona"
       },
       "signal": {
         "name": "Señal"
       },
-      "status": {
-        "name": "Estado"
+      "humidity": {
+        "name": "Humedad"
+      },
+      "temperature": {
+        "name": "Temperatura"
+      },
+      "battery": {
+        "name": "Bateria"
+      },
+      "battery_state": {
+        "name": "Bateria"
+      },
+      "device_mac": {
+        "name": "MAC"
       }
     },
     "binary_sensor": {
-      "magnet_presence": {
-        "name": "Magnetico"
-      },
       "tamper_evident": {
         "name": "Tamper"
+      },
+      "shielded": {
+        "name": "Blindado"
       },
       "bypassed": {
         "name": "Biapaseado"
@@ -95,11 +101,14 @@
       "alarm": {
         "name": "Alarma"
       },
-      "stay_away": {
-        "name": "Stay Away"
+      "wifi_state": {
+        "name": "Wi-Fi"
       },
-      "is_via_repeater": {
-        "name": "Is via repeater"
+      "movile_net_state": {
+        "name": "Red (GPRS/3G/4G)"
+      },
+      "ethernet_state": {
+        "name": "Red por cable"
       }
     }
   }

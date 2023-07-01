@@ -1,23 +1,22 @@
 from __future__ import annotations
-
 from typing import cast
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass, DOMAIN as BINARY_SENSOR_DOMAIN, BinarySensorEntityDescription, STATE_ON, STATE_OFF
 from dataclasses import dataclass
 
-from . import HikAxProDataUpdateCoordinator
+from . import HikAlarmDataUpdateCoordinator
 from . import const
 from .model import Zone
 from .entity import HikZoneEntity, HikvisionAlarmEntity
 
 
 @dataclass
-class HikAlarmBinarySensorDescriptionMixin:
+class HikZoneBinarySensorDescriptionMixin:
     """Mixin to describe a Hikvision Alarm Button entity."""
 
     value_fn: Callable[[Zone], None]
@@ -25,24 +24,25 @@ class HikAlarmBinarySensorDescriptionMixin:
 
 
 @dataclass
-class HikAlarmBinarySensornDescription(BinarySensorEntityDescription, HikAlarmBinarySensorDescriptionMixin):
+class HikZoneBinarySensorDescription(BinarySensorEntityDescription, HikZoneBinarySensorDescriptionMixin):
     """Hikvision Alarm Button description."""
 
 
 @dataclass
-class xxHikAlarmBinarySensorDescriptionMixin:
+class HikAlarmBinarySensorDescriptionMixin:
     """Mixin to describe a Hikvision Alarm Button entity."""
 
+    value_fn: Callable[[HikAlarmDataUpdateCoordinator], None]
     domain: str
 
 
 @dataclass
-class xxHikAlarmBinarySensornDescription(BinarySensorEntityDescription, xxHikAlarmBinarySensorDescriptionMixin):
+class HikAlarmBinarySensorDescription(BinarySensorEntityDescription, HikAlarmBinarySensorDescriptionMixin):
     """Hikvision Alarm Button description."""
 
 
 BINARY_SENSORS_ZONE = {
-    "tamper_evident": HikAlarmBinarySensornDescription(
+    "tamper_evident": HikZoneBinarySensorDescription(
         key="tamper_evident",
         icon="mdi:electric-switch",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -51,7 +51,7 @@ BINARY_SENSORS_ZONE = {
         value_fn=lambda data: cast(bool, data.tamper_evident),
         domain=BINARY_SENSOR_DOMAIN,
     ),
-    "shielded": HikAlarmBinarySensornDescription(
+    "shielded": HikZoneBinarySensorDescription(
         key="shielded",
         icon="mdi:shield-lock-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -60,7 +60,7 @@ BINARY_SENSORS_ZONE = {
         value_fn=lambda data: cast(bool, data.shielded),
         domain=BINARY_SENSOR_DOMAIN,
     ),
-    "bypassed": HikAlarmBinarySensornDescription(
+    "bypassed": HikZoneBinarySensorDescription(
         key="bypassed",
         icon="mdi:alarm-light-off",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -69,7 +69,7 @@ BINARY_SENSORS_ZONE = {
         value_fn=lambda data: cast(bool, data.bypassed),
         domain=BINARY_SENSOR_DOMAIN,
     ),
-    "armed": HikAlarmBinarySensornDescription(
+    "armed": HikZoneBinarySensorDescription(
         key="armed",
         icon="mdi:lock",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -78,7 +78,7 @@ BINARY_SENSORS_ZONE = {
         value_fn=lambda data: cast(bool, data.armed),
         domain=BINARY_SENSOR_DOMAIN,
     ),
-    "alarm": HikAlarmBinarySensornDescription(
+    "alarm": HikZoneBinarySensorDescription(
         key="alarm",
         icon="mdi:alarm-light",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -89,19 +89,29 @@ BINARY_SENSORS_ZONE = {
     ),
 }
 
-BINARY_SENSORS: tuple[xxHikAlarmBinarySensornDescription, ...] = (
-    xxHikAlarmBinarySensornDescription(
-        key="reload_hikvision",
-        translation_key="reload_hikvision",
-        icon="mdi:reload",
-        entity_category=EntityCategory.CONFIG,
+BINARY_SENSORS_ALARM: tuple[HikAlarmBinarySensorDescription, ...] = (
+    HikAlarmBinarySensorDescription(
+        key="wifi_state",
+        translation_key="wifi_state",
+        icon="mdi:wifi",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda coordinator: cast(bool, coordinator.wifi_state),
         domain=BINARY_SENSOR_DOMAIN,
     ),
-    xxHikAlarmBinarySensornDescription(
-        key="test",
-        translation_key="test",
-        icon="mdi:reload",
-        entity_category=EntityCategory.CONFIG,
+    HikAlarmBinarySensorDescription(
+        key="movile_net_state",
+        translation_key="movile_net_state",
+        icon="mdi:broadcast",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda coordinator: cast(bool, coordinator.movile_net_state),
+        domain=BINARY_SENSOR_DOMAIN,
+    ),
+    HikAlarmBinarySensorDescription(
+        key="ethernet_state",
+        translation_key="ethernet_state",
+        icon="mdi:ethernet",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda coordinator: cast(bool, coordinator.ethernet_state),
         domain=BINARY_SENSOR_DOMAIN,
     ),
 )
@@ -110,57 +120,49 @@ BINARY_SENSORS: tuple[xxHikAlarmBinarySensornDescription, ...] = (
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up a Hikvision ax pro alarm control panel based on a config entry."""
 
-    coordinator: HikAxProDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
+    coordinator: HikAlarmDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
 
     @callback
     def async_add_alarm_zone_binary_sensor_entity(zone: Zone, type: str):
-        binary_sensor_entity = HikBinarySensor(coordinator, zone, BINARY_SENSORS_ZONE[type])
+        binary_sensor_entity = HikZoneBinarySensor(coordinator, zone, BINARY_SENSORS_ZONE[type])
 
         async_add_entities([binary_sensor_entity])
 
-    async_dispatcher_connect(hass, "alarmo_register_zone_binary_sensor_entity", async_add_alarm_zone_binary_sensor_entity)
+    async_dispatcher_connect(hass, "hik_register_zone_binary_sensor", async_add_alarm_zone_binary_sensor_entity)
 
     @callback
     def async_add_alarm_entity_binary_sensor_entity():
-        async_add_entities(HikAlarmBinarySensor(coordinator, description) for description in BINARY_SENSORS)
+        async_add_entities(HikAlarmBinarySensor(coordinator, entity_description) for entity_description in BINARY_SENSORS_ALARM)
 
-    async_dispatcher_connect(hass, "alarmo_register_entity_binary_sensor_entity", async_add_alarm_entity_binary_sensor_entity)
+    async_dispatcher_connect(hass, "hik_register_alarm_binary_sensor", async_add_alarm_entity_binary_sensor_entity)
 
     async_dispatcher_send(hass, "hik_binary_sensor_platform_loaded")
 
 
-class HikBinarySensor(HikZoneEntity, BinarySensorEntity):
+class HikZoneBinarySensor(HikZoneEntity, BinarySensorEntity):
     """Representation of Hikvision tamper_evident detection."""
 
-    def __init__(self, coordinator: HikAxProDataUpdateCoordinator, zone: Zone, entity_description: HikAlarmBinarySensornDescription) -> None:
+    def __init__(self, coordinator: HikAlarmDataUpdateCoordinator, zone: Zone, entity_description: HikZoneBinarySensorDescription) -> None:
         """Create the entity with a DataUpdateCoordinator."""
 
-        self.entity_description: HikAlarmBinarySensornDescription = entity_description
+        self.entity_description: HikZoneBinarySensorDescription = entity_description
 
         super().__init__(coordinator, zone.id, self.entity_description.key, self.entity_description.domain)
 
     @property
     def icon(self) -> str | None:
+        return self.entity_description.icon
+
         """Return the icon to use in the frontend, if any."""
         if self.coordinator.zones and self.coordinator.zones[self.zone_id]:
             value = self.entity_description.value_fn(self.coordinator.zones[self.zone_id])
+
             if value is True:
-                self._attr_icon = "mdi:magnet-on"
+                return "mdi:magnet-on"
             else:
-                self._attr_icon = "mdi:magnet"
+                return "mdi:magnet"
         else:
-            self._attr_icon = "mdi:help"
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.async_write_ha_state()
-
-        if self.coordinator.zones and self.coordinator.zones[self.zone_id]:
-            value = self.entity_description.value_fn(self.coordinator.zones[self.zone_id])
-            self._attr_state = STATE_ON if value is True else STATE_OFF
-        else:
-            self._attr_state = None
+            return "mdi:help"
 
     @property
     def is_on(self) -> bool | None:
@@ -168,13 +170,19 @@ class HikBinarySensor(HikZoneEntity, BinarySensorEntity):
         if self.coordinator.zones and self.coordinator.zones[self.zone_id]:
             return self.entity_description.value_fn(self.coordinator.zones[self.zone_id])
         else:
-            return False
+            return None
 
 
 class HikAlarmBinarySensor(HikvisionAlarmEntity, BinarySensorEntity):
     """Representation of a Hikvision Alarm button."""
 
-    def __init__(self, coordinator: HikAxProDataUpdateCoordinator, description: xxHikAlarmBinarySensornDescription):
-        self.entity_description: xxHikAlarmBinarySensornDescription = description
+    def __init__(self, coordinator: HikAlarmDataUpdateCoordinator, entity_description: HikAlarmBinarySensorDescription):
+        self.entity_description: HikAlarmBinarySensorDescription = entity_description
 
-        super().__init__(coordinator, description.key)
+        super().__init__(coordinator, entity_description.key)
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the binary sensor is on."""
+
+        return self.entity_description.value_fn(self.coordinator)
