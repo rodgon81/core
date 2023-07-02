@@ -9,20 +9,18 @@ import base64
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.restore_state import RestoreEntity
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.event import async_track_point_in_time, async_call_later
-from homeassistant.helpers import device_registry as dr
-from homeassistant.components.alarm_control_panel import AlarmControlPanelEntity, AlarmControlPanelEntityFeature, DOMAIN as PLATFORM
+from homeassistant.components.alarm_control_panel import AlarmControlPanelEntity, AlarmControlPanelEntityFeature, DOMAIN as ALARM_CONTROL_PANEL_DOMAIN
 from homeassistant.util import slugify
 
 from . import const
-from . import HikAlarmDataUpdateCoordinator
+from .coordinator import HikAlarmDataUpdateCoordinator
+from .entity import HikAlarmEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,14 +65,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     )
 
 
-# -------------------------------------------------
-
-
-class AlarmoBaseEntity(CoordinatorEntity, AlarmControlPanelEntity, RestoreEntity):
+class AlarmoBaseEntity(HikAlarmEntity, AlarmControlPanelEntity, RestoreEntity):
     def __init__(self, hass: HomeAssistant, name: str, coordinator: HikAlarmDataUpdateCoordinator, entry_id) -> None:
         """Initialize the alarm_control_panel entity."""
 
-        self.entity_id = "{}.{}".format(PLATFORM, slugify(name))
         self._name = name
         self.entry_id = entry_id
         self._state = None
@@ -88,19 +82,7 @@ class AlarmoBaseEntity(CoordinatorEntity, AlarmControlPanelEntity, RestoreEntity
         self.area_id = None
         self._revert_state = None
 
-        super().__init__(coordinator=coordinator)
-
-    @property
-    def device_info(self) -> dict:
-        """Return info for device registry."""
-        return {
-            "identifiers": {(const.DOMAIN, self.coordinator.id)},
-        }
-
-    @property
-    def unique_id(self):
-        """Return a unique ID to use for this entity."""
-        return f"{self.entity_id}"
+        super().__init__(coordinator, self._name, ALARM_CONTROL_PANEL_DOMAIN)
 
     @property
     def icon(self):

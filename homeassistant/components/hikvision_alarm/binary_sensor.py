@@ -5,14 +5,14 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
-from collections.abc import Callable, Coroutine
-from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass, DOMAIN as BINARY_SENSOR_DOMAIN, BinarySensorEntityDescription, STATE_ON, STATE_OFF
+from collections.abc import Callable
+from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass, DOMAIN as BINARY_SENSOR_DOMAIN, BinarySensorEntityDescription
 from dataclasses import dataclass
 
-from . import HikAlarmDataUpdateCoordinator
+from .coordinator import HikAlarmDataUpdateCoordinator
 from . import const
 from .model import Zone
-from .entity import HikZoneEntity, HikvisionAlarmEntity
+from .entity import HikZoneEntity, HikAlarmEntity
 
 
 @dataclass
@@ -173,13 +173,13 @@ class HikZoneBinarySensor(HikZoneEntity, BinarySensorEntity):
             return None
 
 
-class HikAlarmBinarySensor(HikvisionAlarmEntity, BinarySensorEntity):
+class HikAlarmBinarySensor(HikAlarmEntity, BinarySensorEntity):
     """Representation of a Hikvision Alarm button."""
 
     def __init__(self, coordinator: HikAlarmDataUpdateCoordinator, entity_description: HikAlarmBinarySensorDescription):
         self.entity_description: HikAlarmBinarySensorDescription = entity_description
 
-        super().__init__(coordinator, entity_description.key)
+        super().__init__(coordinator, entity_description.key, self.entity_description.domain)
 
     @property
     def is_on(self) -> bool | None:

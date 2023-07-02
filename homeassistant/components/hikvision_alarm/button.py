@@ -3,14 +3,14 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.config_entries import ConfigEntry
 from collections.abc import Callable, Coroutine
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
+from homeassistant.components.button import ButtonEntity, ButtonEntityDescription, DOMAIN as BUTTON_DOMAIN
 from homeassistant.const import EntityCategory
 from dataclasses import dataclass
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 
-from . import HikAlarmDataUpdateCoordinator
+from .coordinator import HikAlarmDataUpdateCoordinator
 from .const import DOMAIN, DATA_COORDINATOR
-from .entity import HikvisionAlarmEntity
+from .entity import HikAlarmEntity
 
 
 @dataclass
@@ -18,6 +18,7 @@ class HikAlarmButtonDescriptionMixin:
     """Mixin to describe a Hikvision Alarm Button entity."""
 
     press_action: Callable[[HikAlarmDataUpdateCoordinator], Coroutine]
+    domain: str
 
 
 @dataclass
@@ -32,6 +33,7 @@ BUTTONS_ALARM: tuple[HikAlarmButtonDescription, ...] = (
         icon="mdi:reload",
         entity_category=EntityCategory.CONFIG,
         press_action=lambda coordinator: coordinator.handle_reload(),
+        domain=BUTTON_DOMAIN,
     ),
 )
 
@@ -48,13 +50,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     async_dispatcher_send(hass, "hik_button_platform_loaded")
 
 
-class HikAlarmButton(HikvisionAlarmEntity, ButtonEntity):
+class HikAlarmButton(HikAlarmEntity, ButtonEntity):
     """Representation of a Hikvision Alarm button."""
 
     def __init__(self, coordinator: HikAlarmDataUpdateCoordinator, entity_description: HikAlarmButtonDescription):
         self.entity_description: HikAlarmButtonDescription = entity_description
 
-        super().__init__(coordinator, entity_description.key)
+        super().__init__(coordinator, entity_description.key, self.entity_description.domain)
 
     async def async_press(self) -> None:
         await self.entity_description.press_action(self.coordinator)

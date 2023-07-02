@@ -6,14 +6,14 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable
 from homeassistant.components.sensor import SensorEntity, DOMAIN as SENSOR_DOMAIN, SensorEntityDescription, SensorDeviceClass
 from dataclasses import dataclass
 
-from . import HikAlarmDataUpdateCoordinator
+from .coordinator import HikAlarmDataUpdateCoordinator
 from .const import PERCENTAGE, UnitOfTemperature, SIGNAL_STRENGTH_DECIBELS_MILLIWATT, DOMAIN, DATA_COORDINATOR
 from .model import Zone, Status
-from .entity import HikZoneEntity, HikvisionAlarmEntity
+from .entity import HikZoneEntity, HikAlarmEntity
 
 
 @dataclass
@@ -182,14 +182,14 @@ class HikZoneSensor(HikZoneEntity, SensorEntity):
             return None
 
 
-class HikAlarmSensor(HikvisionAlarmEntity, SensorEntity):
+class HikAlarmSensor(HikAlarmEntity, SensorEntity):
     """Representation of Hikvision external magnet detector."""
 
     def __init__(self, coordinator: HikAlarmDataUpdateCoordinator, entity_description: HikAlarmSensornDescription) -> None:
         """Create the entity with a DataUpdateCoordinator."""
         self.entity_description: HikAlarmSensornDescription = entity_description
 
-        super().__init__(coordinator, self.entity_description.key)
+        super().__init__(coordinator, self.entity_description.key, self.entity_description.domain)
 
     @property
     def native_value(self) -> StateType:

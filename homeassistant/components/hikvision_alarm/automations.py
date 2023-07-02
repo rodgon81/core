@@ -10,6 +10,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 from . import const
 
+# from .coordinator import HikAlarmDataUpdateCoordinator
 # from .alarm_control_panel import AlarmoBaseEntity
 
 _LOGGER = logging.getLogger(__name__)

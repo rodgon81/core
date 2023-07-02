@@ -8,7 +8,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.components.websocket_api import decorators, async_register_command, ActiveConnection, BASE_COMMAND_MESSAGE_SCHEMA
 
-# from . import HikAlarmDataUpdateCoordinator
+# from .coordinator import HikAlarmDataUpdateCoordinator
 # from .alarm_control_panel import AlarmoAreaEntity, AlarmoMasterEntity
 from .const import DOMAIN, DATA_COORDINATOR, DATA_AREAS, DATA_MASTER, CONF_HIK_CODE_ARM_REQUIRED, CONF_HIK_CODE_DISARM_REQUIRED, CONF_HIK_CODE_FORMAT
 
