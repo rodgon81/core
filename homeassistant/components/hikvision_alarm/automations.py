@@ -8,10 +8,32 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.components.binary_sensor.device_condition import ENTITY_CONDITIONS
 from homeassistant.exceptions import HomeAssistantError
 
-from . import const
+from .const import (
+    DOMAIN,
+    DATA_COORDINATOR,
+    ATTR_ENABLED,
+    ARM_MODES,
+    ATTR_TRIGGERS,
+    EVENT_FAILED_TO_ARM,
+    ATTR_SERVICE,
+    STATE_OPEN,
+    ATTR_ACTIONS,
+    CONF_SERVICE_DATA,
+    ATTR_ENTITY_ID,
+    CONF_TYPE,
+    ATTR_NOTIFICATION,
+    EVENT_ARM_FAILURE,
+    STATE_CLOSED,
+    STATE_UNAVAILABLE,
+    ATTR_EVENT,
+    ATTR_MODES,
+    ATTR_AREA,
+    DATA_AREAS,
+    DATA_MASTER,
+)
 
-# from .coordinator import HikAlarmDataUpdateCoordinator
-# from .alarm_control_panel import AlarmoBaseEntity
+from .coordinator import HikAlarmDataUpdateCoordinator
+from .alarm_control_panel import AlarmoBaseEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,11 +49,13 @@ class AutomationHandler:
         self._sensorTranslationLang = None
         self._alarmTranslationLang = None
 
+        @callback
         def async_update_config():
             """automation config updated, reload the configuration."""
-            self._config = self.hass.data[const.DOMAIN][self.entry_id]["coordinator"].store.async_get_automations()
+            coordinator: HikAlarmDataUpdateCoordinator = self.hass.data[DOMAIN][self.entry_id][DATA_COORDINATOR]
+            self._config = coordinator.store.async_get_automations()
 
-        self._subscriptions.append(async_dispatcher_connect(hass, "alarmo_automations_updated", async_update_config))
+        self._subscriptions.append(async_dispatcher_connect(self.hass, "alarmo_automations_updated", async_update_config))
 
         async_update_config()
 
@@ -41,23 +65,23 @@ class AutomationHandler:
                 # ignore automations at startup/restoring
                 return
             if area_id:
-                alarm_entity = self.hass.data[const.DOMAIN][self.entry_id]["areas"][area_id]
+                alarm_entity: AlarmoBaseEntity = self.hass.data[DOMAIN][self.entry_id][DATA_AREAS][area_id]
             else:
-                alarm_entity = self.hass.data[const.DOMAIN][self.entry_id]["master"]
+                alarm_entity: AlarmoBaseEntity = self.hass.data[DOMAIN][self.entry_id][DATA_MASTER]
 
             if not alarm_entity:
                 return
 
             _LOGGER.debug("state of {} is updated from {} to {}".format(alarm_entity.entity_id, old_state, new_state))
 
-            if new_state in const.ARM_MODES:
+            if new_state in ARM_MODES:
                 # we don't distinguish between armed modes for automations, they are handled separately
                 new_state = "armed"
 
             for automation_id, config in self._config.items():
-                if not config[const.ATTR_ENABLED]:
+                if not config[ATTR_ENABLED]:
                     continue
-                for trigger in config[const.ATTR_TRIGGERS]:
+                for trigger in config[ATTR_TRIGGERS]:
                     if self.validate_area(trigger, area_id, self.hass) and self.validate_modes(trigger, alarm_entity._arm_mode) and self.validate_trigger(trigger, new_state, old_state):
                         await self.async_execute_automation(automation_id, alarm_entity)
 
@@ -65,21 +89,22 @@ class AutomationHandler:
 
         @callback
         async def async_handle_event(event: str, area_id: str, args: dict = {}):
-            if event != const.EVENT_FAILED_TO_ARM:
+            if event != EVENT_FAILED_TO_ARM:
                 return
+
             if area_id:
-                alarm_entity = self.hass.data[const.DOMAIN][self.entry_id]["areas"][area_id]
+                alarm_entity: AlarmoBaseEntity = self.hass.data[DOMAIN][self.entry_id][DATA_AREAS][area_id]
             else:
-                alarm_entity = self.hass.data[const.DOMAIN][self.entry_id]["master"]
+                alarm_entity: AlarmoBaseEntity = self.hass.data[DOMAIN][self.entry_id][DATA_MASTER]
 
             _LOGGER.debug("{} has failed to arm".format(alarm_entity.entity_id))
 
             for automation_id, config in self._config.items():
-                if not config[const.ATTR_ENABLED]:
+                if not config[ATTR_ENABLED]:
                     continue
 
-                for trigger in config[const.ATTR_TRIGGERS]:
-                    if self.validate_area(trigger, area_id, self.hass) and self.validate_modes(trigger, alarm_entity._arm_mode) and self.validate_trigger(trigger, const.EVENT_ARM_FAILURE):
+                for trigger in config[ATTR_TRIGGERS]:
+                    if self.validate_area(trigger, area_id, self.hass) and self.validate_modes(trigger, alarm_entity._arm_mode) and self.validate_trigger(trigger, EVENT_ARM_FAILURE):
                         await self.async_execute_automation(automation_id, alarm_entity)
 
         self._subscriptions.append(async_dispatcher_connect(self.hass, "alarmo_event", async_handle_event))
@@ -89,20 +114,20 @@ class AutomationHandler:
         while len(self._subscriptions):
             self._subscriptions.pop()()
 
-    # , alarm_entity: AlarmoBaseEntity
-    async def async_execute_automation(self, automation_id: str, alarm_entity):
+    async def async_execute_automation(self, automation_id: str, alarm_entity: AlarmoBaseEntity):
         # automation is a dict of AutomationEntry
         _LOGGER.debug("Executing automation {}".format(automation_id))
 
-        actions = self._config[automation_id][const.ATTR_ACTIONS]
+        actions = self._config[automation_id][ATTR_ACTIONS]
+
         for action in actions:
             try:
-                service_data = copy.copy(action[const.CONF_SERVICE_DATA])
+                service_data = copy.copy(action[CONF_SERVICE_DATA])
 
-                if const.ATTR_ENTITY_ID in action and action[const.ATTR_ENTITY_ID]:
-                    service_data[const.ATTR_ENTITY_ID] = action[const.ATTR_ENTITY_ID]
+                if ATTR_ENTITY_ID in action and action[ATTR_ENTITY_ID]:
+                    service_data[ATTR_ENTITY_ID] = action[ATTR_ENTITY_ID]
 
-                if self._config[automation_id][const.CONF_TYPE] == const.ATTR_NOTIFICATION and ATTR_MESSAGE in service_data:
+                if self._config[automation_id][CONF_TYPE] == ATTR_NOTIFICATION and ATTR_MESSAGE in service_data:
                     res = re.search(r"{{open_sensors(\|lang=([^}]+))?(\|format=short)?}}", service_data[ATTR_MESSAGE])
                     if res:
                         lang = res.group(2) if res.group(2) else "en"
@@ -149,7 +174,7 @@ class AutomationHandler:
                         changed_by = alarm_entity.changed_by if alarm_entity.changed_by else ""
                         service_data[ATTR_MESSAGE] = service_data[ATTR_MESSAGE].replace("{{changed_by}}", changed_by)
 
-                domain, service = action[const.ATTR_SERVICE].split(".")
+                domain, service = action[ATTR_SERVICE].split(".")
 
                 await self.hass.async_create_task(
                     self.hass.services.async_call(
@@ -168,7 +193,7 @@ class AutomationHandler:
         result = []
 
         for (automation_id, config) in self._config.items():
-            if any(el[const.ATTR_AREA] == area_id for el in config[const.ATTR_TRIGGERS]):
+            if any(el[ATTR_AREA] == area_id for el in config[ATTR_TRIGGERS]):
                 result.append(automation_id)
 
         return result
@@ -188,21 +213,21 @@ class AutomationHandler:
 
         device_type = entity.attributes["device_class"] if entity and "device_class" in entity.attributes else None
 
-        if state == const.STATE_OPEN:
+        if state == STATE_OPEN:
             translation_key = "component.binary_sensor.device_automation.condition_type.{}".format(ENTITY_CONDITIONS[device_type][0]["type"]) if device_type in ENTITY_CONDITIONS else None
 
             if translation_key and translation_key in translations:
                 string = translations[translation_key]
             else:
                 string = "{entity_name} is open"
-        elif state == const.STATE_CLOSED:
+        elif state == STATE_CLOSED:
             translation_key = "component.binary_sensor.device_automation.condition_type.{}".format(ENTITY_CONDITIONS[device_type][1]["type"]) if device_type in ENTITY_CONDITIONS else None
 
             if translation_key and translation_key in translations:
                 string = translations[translation_key]
             else:
                 string = "{entity_name} is closed"
-        elif state == const.STATE_UNAVAILABLE:
+        elif state == STATE_UNAVAILABLE:
             string = "{entity_name} is unavailable"
 
         else:
@@ -242,29 +267,29 @@ class AutomationHandler:
         return entity_id
 
     def validate_area(self, trigger, area_id, hass):
-        if const.ATTR_AREA not in trigger:
+        if ATTR_AREA not in trigger:
             return False
-        elif trigger[const.ATTR_AREA]:
-            return trigger[const.ATTR_AREA] == area_id
-        elif len(hass.data[const.DOMAIN][self.entry_id]["areas"]) == 1:
+        elif trigger[ATTR_AREA]:
+            return trigger[ATTR_AREA] == area_id
+        elif len(hass.data[DOMAIN][self.entry_id][DATA_AREAS]) == 1:
             return True
         else:
             return area_id is None
 
     def validate_modes(self, trigger, mode):
-        if const.ATTR_MODES not in trigger:
+        if ATTR_MODES not in trigger:
             return False
-        elif not trigger[const.ATTR_MODES]:
+        elif not trigger[ATTR_MODES]:
             return True
         else:
-            return mode in trigger[const.ATTR_MODES]
+            return mode in trigger[ATTR_MODES]
 
     def validate_trigger(self, trigger, to_state, from_state=None):
-        if const.ATTR_EVENT not in trigger:
+        if ATTR_EVENT not in trigger:
             return False
-        elif trigger[const.ATTR_EVENT] == "untriggered" and from_state == "triggered":
+        elif trigger[ATTR_EVENT] == "untriggered" and from_state == "triggered":
             return True
-        elif trigger[const.ATTR_EVENT] == to_state:
+        elif trigger[ATTR_EVENT] == to_state:
             return True
         else:
             return False

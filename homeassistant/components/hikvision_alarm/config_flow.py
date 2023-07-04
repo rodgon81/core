@@ -4,10 +4,10 @@ import voluptuous as vol
 import bcrypt
 import base64
 
-from typing import Any, Final
-from homeassistant import config_entries
+from typing import Any
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.data_entry_flow import FlowResult, FlowHandler
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
@@ -55,20 +55,6 @@ def schema_defaults(schema, dps_list=None, **defaults):
     return copy
 
 
-class AxHub:
-    """Helper class for validation and setup ops."""
-
-    def __init__(self, host: str, username: str, password: str, hass: HomeAssistant) -> None:
-        self.axpro = HikAx(host, username, password)
-        self.hass = hass
-
-    async def authenticate(self) -> bool:
-        """Check the provided credentials by connecting to ax pro."""
-        is_connect_success = await self.hass.async_add_executor_job(self.axpro.connect)
-
-        return is_connect_success
-
-
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
 
@@ -76,9 +62,9 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         if data[const.CONF_HIK_CODE] is None or data[const.CONF_HIK_CODE] == "" or len(data[const.CONF_HIK_CODE]) < 4:
             raise InvalidCode
 
-    hub = AxHub(data[const.CONF_HIK_HOST], data[const.CONF_HIK_USERNAME], data[const.CONF_HIK_PASSWORD], hass)
+    axpro = HikAx(data[const.CONF_HIK_HOST], data[const.CONF_HIK_USERNAME], data[const.CONF_HIK_PASSWORD])
 
-    if not await hub.authenticate():
+    if not await hass.async_add_executor_job(axpro.connect):
         raise InvalidAuth
 
     return {"title": f"{const.DOMAIN}_{data[const.CONF_HIK_HOST]}"}
@@ -86,38 +72,47 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
 async def format_config(data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
-    data_master: dict = {}
-    data_master[const.CONF_HIK_NAME] = data[const.CONF_HIK_MASTER_NAME]
-    data_master[const.CONF_HIK_ENABLED] = data[const.CONF_HIK_MASTER_ENABLED]
+    server_config: dict = {}
+    server_config[const.CONF_HIK_HOST] = data[const.CONF_HIK_HOST]
+    server_config[const.CONF_HIK_USERNAME] = data[const.CONF_HIK_USERNAME]
+    server_config[const.CONF_HIK_PASSWORD] = data[const.CONF_HIK_PASSWORD]
+    data[const.CONF_HIK_SERVER_CONFIG] = server_config
 
-    data[const.CONF_HIK_MASTER_CONFIG] = data_master
+    del data[const.CONF_HIK_HOST]
+    del data[const.CONF_HIK_USERNAME]
+    del data[const.CONF_HIK_PASSWORD]
+
+    master_config: dict = {}
+    master_config[const.CONF_HIK_NAME] = data[const.CONF_HIK_MASTER_NAME]
+    master_config[const.CONF_HIK_ENABLED] = data[const.CONF_HIK_MASTER_ENABLED]
+    data[const.CONF_HIK_MASTER_CONFIG] = master_config
 
     del data[const.CONF_HIK_MASTER_NAME]
     del data[const.CONF_HIK_MASTER_ENABLED]
 
-    data_alarm: dict = {}
-    data_alarm[const.CONF_HIK_USERNAME] = data[const.CONF_HIK_USERNAME]
-    data_alarm[const.CONF_HIK_CODE_ARM_REQUIRED] = data[const.CONF_HIK_CODE_ARM_REQUIRED]
-    data_alarm[const.CONF_HIK_CODE_DISARM_REQUIRED] = data[const.CONF_HIK_CODE_DISARM_REQUIRED]
-    data_alarm[const.CONF_HIK_CAN_ARM] = const.DEFAULT_CAN_ARM
-    data_alarm[const.CONF_HIK_CAN_DISARM] = const.DEFAULT_CAN_DISARM
-    data_alarm[const.CONF_HIK_AREA_LIMIT] = const.DEFAULT_AREA_LIMIT
-    data_alarm[const.CONF_HIK_ZONE_BYPASS] = const.DEFAULT_ZONE_BYPASS
+    alarm_config: dict = {}
+    alarm_config[const.CONF_HIK_USERNAME] = data[const.CONF_HIK_SERVER_CONFIG][const.CONF_HIK_USERNAME]
+    alarm_config[const.CONF_HIK_CODE_ARM_REQUIRED] = data[const.CONF_HIK_CODE_ARM_REQUIRED]
+    alarm_config[const.CONF_HIK_CODE_DISARM_REQUIRED] = data[const.CONF_HIK_CODE_DISARM_REQUIRED]
+    alarm_config[const.CONF_HIK_CAN_ARM] = const.DEFAULT_CAN_ARM
+    alarm_config[const.CONF_HIK_CAN_DISARM] = const.DEFAULT_CAN_DISARM
+    alarm_config[const.CONF_HIK_AREA_LIMIT] = const.DEFAULT_AREA_LIMIT
+    alarm_config[const.CONF_HIK_ZONE_BYPASS] = const.DEFAULT_ZONE_BYPASS
 
     if len(data[const.CONF_HIK_CODE]) >= 4:
-        data_alarm[const.CONF_HIK_CODE_LENGTH] = len(data[const.CONF_HIK_CODE])
-        data_alarm[const.CONF_HIK_CODE_FORMAT] = const.CodeFormat.NUMBER if data[const.CONF_HIK_CODE].isdigit() else const.CodeFormat.TEXT
+        alarm_config[const.CONF_HIK_CODE_LENGTH] = len(data[const.CONF_HIK_CODE])
+        alarm_config[const.CONF_HIK_CODE_FORMAT] = const.CodeFormat.NUMBER if data[const.CONF_HIK_CODE].isdigit() else const.CodeFormat.TEXT
 
         hashed = bcrypt.hashpw(data[const.CONF_HIK_CODE].encode("utf-8"), bcrypt.gensalt(rounds=12))
         hashed = base64.b64encode(hashed)
 
-        data_alarm[const.CONF_HIK_CODE] = hashed.decode()
+        alarm_config[const.CONF_HIK_CODE] = hashed.decode()
     else:
-        data_alarm[const.CONF_HIK_CODE_LENGTH] = 0
-        data_alarm[const.CONF_HIK_CODE_FORMAT] = const.CodeFormat.NUMBER
-        data_alarm[const.CONF_HIK_CODE] = ""
+        alarm_config[const.CONF_HIK_CODE_LENGTH] = 0
+        alarm_config[const.CONF_HIK_CODE_FORMAT] = const.CodeFormat.NUMBER
+        alarm_config[const.CONF_HIK_CODE] = ""
 
-    data[const.CONF_HIK_ALARM_CONFIG] = data_alarm
+    data[const.CONF_HIK_ALARM_CONFIG] = alarm_config
 
     del data[const.CONF_HIK_CODE_ARM_REQUIRED]
     del data[const.CONF_HIK_CODE_DISARM_REQUIRED]
@@ -126,19 +121,29 @@ async def format_config(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-class AxProConfigFlow(config_entries.ConfigFlow, domain=const.DOMAIN):
+class AxProConfigFlow(ConfigFlow, domain=const.DOMAIN):
     """Handle a config flow for hikvision_axpro."""
+
+    VERSION = "1.0.0"
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
+    def async_get_options_flow(config_entry: ConfigEntry):
         """Get options flow for this handler."""
         return AxProOptionsFlowHandler(config_entry)
 
     async def async_step_user(self, user_input=None) -> FlowResult:
         """Handle the initial step."""
+
+        defaults = user_input or {}
+
+        # return await flow_handler(self, defaults, user_input, "user")
+
         if user_input is None:
-            return self.async_show_form(step_id="user", data_schema=CONFIGURE_SCHEMA)
+            return self.async_show_form(
+                step_id="user",
+                data_schema=schema_defaults(CONFIGURE_SCHEMA, **defaults),
+            )
 
         errors = {}
 
@@ -156,15 +161,21 @@ class AxProConfigFlow(config_entries.ConfigFlow, domain=const.DOMAIN):
         else:
             user_input = await format_config(user_input)
 
+            _LOGGER.debug("Saving options %s %s", info["title"], user_input)
+
             return self.async_create_entry(title=info["title"], data=user_input)
 
-        return self.async_show_form(step_id="user", data_schema=CONFIGURE_SCHEMA, errors=errors)
+        return self.async_show_form(
+            step_id="user",
+            data_schema=schema_defaults(CONFIGURE_SCHEMA, None, **defaults),
+            errors=errors,
+        )
 
 
-class AxProOptionsFlowHandler(config_entries.OptionsFlow):
+class AxProOptionsFlowHandler(OptionsFlow):
     """Handle options flow for AxPro integration."""
 
-    def __init__(self, config_entry):
+    def __init__(self, config_entry: ConfigEntry):
         """Initialize AxPro options flow."""
         self.config_entry = config_entry
 
@@ -172,6 +183,8 @@ class AxProOptionsFlowHandler(config_entries.OptionsFlow):
         """Manage basic options."""
         defaults = self.config_entry.data.copy()
         defaults.update(user_input or {})
+
+        # return await flow_handler(self, defaults, user_input, "init")
 
         if user_input is None:
             return self.async_show_form(
@@ -193,18 +206,61 @@ class AxProOptionsFlowHandler(config_entries.OptionsFlow):
             _LOGGER.exception("Unexpected exception")
             errors["base"] = "unknown"
         else:
-            _LOGGER.debug("Saving options %s %s", info["title"], user_input)
-
             user_input = await format_config(user_input)
 
-            self.hass.config_entries.async_update_entry(
-                self.config_entry,
-                data=user_input,
-            )
+            _LOGGER.debug("Saving options %s %s", info["title"], user_input)
+
+            # self.hass.config_entries.async_update_entry(
+            #   self.config_entry,
+            #   data=user_input,
+            # )
 
             return self.async_create_entry(title=info["title"], data=user_input)
 
-        return self.async_show_form(step_id="init", data_schema=schema_defaults(CONFIGURE_SCHEMA, None, **defaults), errors=errors)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=schema_defaults(CONFIGURE_SCHEMA, None, **defaults),
+            errors=errors,
+        )
+
+
+async def flow_handler(self: FlowHandler, defaults, user_input, step: str) -> FlowResult:
+    if user_input is None:
+        return self.async_show_form(
+            step_id=step,
+            data_schema=schema_defaults(CONFIGURE_SCHEMA, **defaults),
+        )
+
+    errors = {}
+
+    try:
+        info = await validate_input(self.hass, user_input)
+    except CannotConnect:
+        errors["base"] = "cannot_connect"
+    except InvalidAuth:
+        errors["base"] = "invalid_auth"
+    except InvalidCode:
+        errors["base"] = "invalid_code"
+    except Exception:
+        _LOGGER.exception("Unexpected exception")
+        errors["base"] = "unknown"
+    else:
+        user_input = await format_config(user_input)
+
+        _LOGGER.debug("Saving options %s %s", info["title"], user_input)
+
+        # self.hass.config_entries.async_update_entry(
+        #   self.config_entry,
+        #   data=user_input,
+        # )
+
+        return self.async_create_entry(title=info["title"], data=user_input)
+
+    return self.async_show_form(
+        step_id=step,
+        data_schema=schema_defaults(CONFIGURE_SCHEMA, None, **defaults),
+        errors=errors,
+    )
 
 
 class CannotConnect(HomeAssistantError):

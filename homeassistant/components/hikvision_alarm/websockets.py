@@ -8,8 +8,8 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.components.websocket_api import decorators, async_register_command, ActiveConnection, BASE_COMMAND_MESSAGE_SCHEMA
 
-# from .coordinator import HikAlarmDataUpdateCoordinator
-# from .alarm_control_panel import AlarmoAreaEntity, AlarmoMasterEntity
+from .coordinator import HikAlarmDataUpdateCoordinator
+from .alarm_control_panel import AlarmoBaseEntity
 from .const import DOMAIN, DATA_COORDINATOR, DATA_AREAS, DATA_MASTER, CONF_HIK_CODE_ARM_REQUIRED, CONF_HIK_CODE_DISARM_REQUIRED, CONF_HIK_CODE_FORMAT
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,8 +43,8 @@ def websocket_get_config(hass: HomeAssistant, connection: ActiveConnection, msg:
     """Publish config data."""
     result = ""
 
-    for (key, val) in hass.data[DOMAIN].items():
-        coordinator = val[DATA_COORDINATOR]
+    for val in hass.data[DOMAIN].values():
+        coordinator: HikAlarmDataUpdateCoordinator = val[DATA_COORDINATOR]
         config = coordinator.store.async_get_alarm_config()
 
         result = {
@@ -61,7 +61,7 @@ def websocket_get_alarm_entities(hass: HomeAssistant, connection: ActiveConnecti
     """Publish alarm entity data."""
     result = ""
 
-    for (key, val) in hass.data[DOMAIN].items():
+    for val in hass.data[DOMAIN].values():
         result = [{"entity_id": entity.entity_id, "area_id": area_id} for (area_id, entity) in val[DATA_AREAS].items()]
 
         if val[DATA_MASTER]:
@@ -76,7 +76,7 @@ def websocket_get_countdown(hass: HomeAssistant, connection: ActiveConnection, m
     entity_id = msg["entity_id"]
     result = ""
 
-    for (key, val) in hass.data[DOMAIN].items():
+    for val in hass.data[DOMAIN].values():
         item = next((entity for entity in val[DATA_AREAS].values() if entity.entity_id == entity_id), None)
 
         if val[DATA_MASTER] and not item and val[DATA_MASTER].entity_id == entity_id:

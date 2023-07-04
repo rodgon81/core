@@ -11,13 +11,12 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dis
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from . import const
 from .model import ZonesResponse, Zone, SubSystemResponse, SubSys, Arming, ZonesConf, ZoneConfig
 from .hikax import HikAx
 from .store import AlarmoStorage
-from .automations import AutomationHandler
-from .event import EventHandler
 from .api_class import ModuleType
 
 
@@ -42,7 +41,6 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
         self.device_name: Optional[str] = None
         self.device_mac: Optional[str] = None
         self.sub_systems: dict[int, SubSys] = {}
-        """ Zones aka devices """
         self.devices: dict[int, ZoneConfig] = {}
         self.id: Optional[str] = entry.entry_id
         self.firmware_version: Optional[str] = None
@@ -64,16 +62,13 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
     def setup_alarm_control_platform_entities(self):
         _LOGGER.debug("setup_alarm_entities de Coordinator")
 
-        self.hass.data[const.DOMAIN][self.entry.entry_id]["automation_handler"] = AutomationHandler(self.hass, self.entry.entry_id)
-        self.hass.data[const.DOMAIN][self.entry.entry_id]["event_handler"] = EventHandler(self.hass, self.entry.entry_id)
-
         _LOGGER.debug("self.entry.data: %s", self.entry.data[const.CONF_HIK_MASTER_CONFIG])
 
         areas = self.store.async_get_areas()
 
         _LOGGER.debug("async_get_areas: %s", areas)
 
-        config = self.store.async_get_master_config()  # self.entry.data[const.CONF_HIK_MASTER_CONFIG]
+        config = self.store.async_get_master_config()
 
         _LOGGER.debug("async_get_master_config: %s", config)
 
@@ -128,21 +123,19 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
         async_dispatcher_send(self.hass, "hik_register_alarm_sensor")
 
     # llamado de websoket
-    async def async_update_config(self):
+    async def async_update_config(self, entry: ConfigEntry):
         _LOGGER.debug("async_update_config de Coordinator")
-
-        data = self.entry.data
 
         old_config = self.store.async_get_master_config()
 
         _LOGGER.debug("async_get_master_config: %s", old_config)
-        _LOGGER.debug("data: %s", data)
+        _LOGGER.debug("data: %s", entry.data)
 
-        if old_config != data[const.CONF_HIK_MASTER_CONFIG]:
+        if old_config != entry.data[const.CONF_HIK_MASTER_CONFIG]:
             if self.hass.data[const.DOMAIN][self.entry.entry_id][const.ATTR_MASTER]:
                 await self.async_remove_entity(const.ATTR_MASTER)
-            if data[const.CONF_HIK_MASTER_CONFIG][const.CONF_HIK_ENABLED]:
-                async_dispatcher_send(self.hass, "alarmo_register_master", data[const.CONF_HIK_MASTER_CONFIG])
+            if entry.data[const.CONF_HIK_MASTER_CONFIG][const.CONF_HIK_ENABLED]:
+                async_dispatcher_send(self.hass, "alarmo_register_master", entry.data[const.CONF_HIK_MASTER_CONFIG])
             else:
                 automations = self.hass.data[const.DOMAIN][self.entry.entry_id]["automation_handler"].get_automations_by_area(None)
 
@@ -151,8 +144,8 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
                         self.store.async_delete_automation(el)
                     async_dispatcher_send(self.hass, "alarmo_automations_updated")
 
-        self.store.async_update_master_config(data[const.CONF_HIK_MASTER_CONFIG])
-        self.store.async_update_alarm_config(data[const.CONF_HIK_ALARM_CONFIG])
+        self.store.async_update_master_config(entry.data[const.CONF_HIK_MASTER_CONFIG])
+        self.store.async_update_alarm_config(entry.data[const.CONF_HIK_ALARM_CONFIG])
 
         async_dispatcher_send(self.hass, "alarmo_config_updated")
 
@@ -234,56 +227,28 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
 
         # remove alarm_control_panel entities
         areas = list(self.hass.data[const.DOMAIN][self.entry.entry_id]["areas"].keys())
+
         for area in areas:
             await self.async_remove_entity(area)
+
         if self.hass.data[const.DOMAIN][self.entry.entry_id]["master"]:
             await self.async_remove_entity("master")
-
-        del self.hass.data[const.DOMAIN][self.entry.entry_id]["automation_handler"]
-        del self.hass.data[const.DOMAIN][self.entry.entry_id]["event_handler"]
 
         # remove subscriptions for coordinator
         while len(self._subscriptions):
             self._subscriptions.pop()()
 
-    async def async_delete_config(self):
-        """wipe alarmo storage"""
-        await self.store.async_delete()
-
     # ------------------------------------------------
-
-    async def get_mac(self):
-        """Handle reload service call."""
-        _LOGGER.info("get_mac")
-        return self.device_mac
-
-    async def get_batery(self):
-        """Handle reload service call."""
-        _LOGGER.info("get_batery")
-        return "100%"
-
-    async def get_wifi_state(self):
-        """Handle reload service call."""
-        _LOGGER.info("get_wifi_state")
-        return False  # self.batery
-
-    async def get_movile_net_state(self):
-        """Handle reload service call."""
-        _LOGGER.info("get_movile_net_state")
-        return True  # self.batery
-
-    async def get_ethernet_state(self):
-        """Handle reload service call."""
-        _LOGGER.info("get_ethernet_state")
-        return True  # self.batery
 
     async def handle_reload(self):
         """Handle reload service call."""
         _LOGGER.info("Service %s.reload called: reloading integration", const.DOMAIN)
 
-        reload_task = [self.hass.config_entries.async_reload(self.entry.entry_id)]
-
-        await asyncio.gather(*reload_task)
+        try:
+            async with timeout(10):
+                await self.hass.async_add_executor_job(self.init_device)
+        except (asyncio.TimeoutError, ConnectionError) as ex:
+            raise ConfigEntryNotReady from ex
 
     def from_bool(self, value: Any) -> bool:
         """Convert string value to boolean."""
@@ -343,7 +308,7 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
 
         user_id = 0
         for user in users["UserList"]["User"]:
-            if user["userName"] == self.entry.data[const.CONF_HIK_USERNAME]:
+            if user["userName"] == self.entry.data[const.CONF_HIK_SERVER_CONFIG][const.CONF_HIK_USERNAME]:
                 user_id = user["id"]
 
         user = self.axpro.get_config_user(user_id)

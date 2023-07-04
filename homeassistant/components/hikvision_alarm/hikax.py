@@ -85,6 +85,9 @@ class HikAx:
         return result
 
     def connect(self):
+        if self.is_connected:
+            return True
+
         params = self.get_session_params()
 
         if params is None:

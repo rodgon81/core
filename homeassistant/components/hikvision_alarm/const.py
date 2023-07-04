@@ -59,6 +59,7 @@ CONF_HIK_CODE_DISARM_REQUIRED: Final[str] = "code_disarm_required"
 CONF_HIK_CODE: Final[str] = CONF_CODE
 CONF_HIK_CODE_LENGTH: Final[str] = "code_length"
 CONF_HIK_CODE_FORMAT: Final[str] = "code_format"
+CONF_HIK_SERVER_CONFIG: Final[str] = "server_config"
 CONF_HIK_MASTER_CONFIG: Final[str] = "master_config"
 CONF_HIK_MASTER_ENABLED: Final[str] = "master_enabled"
 CONF_HIK_MASTER_NAME: Final[str] = "master_name"
@@ -72,12 +73,12 @@ CONF_HIK_CAN_DISARM: Final[str] = "can_disarm"
 CONF_HIK_AREA_LIMIT: Final[str] = "area_limit"
 CONF_HIK_ZONE_BYPASS: Final[str] = "zone_bypass"
 
-DEFAULT_HOST: Final[str] = "192.168.1.9"
-DEFAULT_USERNAME: Final[str] = "admin"
-DEFAULT_PASSWORD: Final[str] = "Elparaiso81"
+DEFAULT_HOST: Final[str] = ""
+DEFAULT_USERNAME: Final[str] = ""
+DEFAULT_PASSWORD: Final[str] = ""
 DEFAULT_CODE_ARM_REQUIRED: Final[bool] = True
 DEFAULT_CODE_DISARM_REQUIRED: Final[bool] = True
-DEFAULT_CODE: Final[str] = "2854"
+DEFAULT_CODE: Final[str] = ""
 DEFAULT_MASTER_ENABLED: Final[bool] = True
 DEFAULT_MASTER_NAME: Final[str] = "Master"
 DEFAULT_SCAN_INTERVAL: Final = timedelta(seconds=5)

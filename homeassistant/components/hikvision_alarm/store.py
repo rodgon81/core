@@ -7,7 +7,7 @@ from homeassistant.core import callback, HomeAssistant
 
 from homeassistant.components.alarm_control_panel.const import FORMAT_NUMBER as CODE_FORMAT_NUMBER
 
-from . import const
+from .const import STATE_ALARM_ARMED_AWAY, STATE_ALARM_ARMED_HOME, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_CUSTOM_BYPASS, STATE_ALARM_ARMED_VACATION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,11 +39,11 @@ class AreaEntry:
     modes = attr.ib(
         type=[str, ModeEntry],
         default={
-            const.STATE_ALARM_ARMED_AWAY: ModeEntry(),
-            const.STATE_ALARM_ARMED_HOME: ModeEntry(),
-            const.STATE_ALARM_ARMED_NIGHT: ModeEntry(),
-            const.STATE_ALARM_ARMED_CUSTOM_BYPASS: ModeEntry(),
-            const.STATE_ALARM_ARMED_VACATION: ModeEntry(),
+            STATE_ALARM_ARMED_AWAY: ModeEntry(),
+            STATE_ALARM_ARMED_HOME: ModeEntry(),
+            STATE_ALARM_ARMED_NIGHT: ModeEntry(),
+            STATE_ALARM_ARMED_CUSTOM_BYPASS: ModeEntry(),
+            STATE_ALARM_ARMED_VACATION: ModeEntry(),
         },
     )
 

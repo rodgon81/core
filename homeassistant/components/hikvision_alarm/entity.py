@@ -10,6 +10,15 @@ from .coordinator import HikAlarmDataUpdateCoordinator
 from .const import MANUFACTURER, DOMAIN, DATA_COORDINATOR
 
 
+def format_id_base_0(zone_id: int) -> str:
+    zone_id_final: int = zone_id + 1
+
+    if zone_id_final < 10:
+        return f"0{zone_id_final}"
+
+    return str(zone_id_final)
+
+
 def device_registry(hass: HomeAssistant, entry: ConfigEntry):
     coordinator: HikAlarmDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
 
@@ -60,7 +69,7 @@ def device_registry(hass: HomeAssistant, entry: ConfigEntry):
                 identifiers={(DOMAIN, str(coordinator.id) + "-" + str(zone_config.id))},
                 manufacturer=MANUFACTURER,
                 name=zone_config.zone_name,
-                model="Zona de Alarma",
+                model=f"Zona {format_id_base_0(zone_config.id)}",
                 via_device=((DOMAIN, str(coordinator.id) + "-zone_group")),
             )
 
@@ -95,15 +104,8 @@ class HikZoneEntity(CoordinatorEntity[HikAlarmDataUpdateCoordinator]):
 
         self.zone_id: int = zone_id
 
-        self._attr_unique_id = f"{coordinator.id}_{type}_Zone_{self.zone_id}"
-
-        zone_id = self.zone_id + 1
-        zone_id_str: str = zone_id
-
-        if zone_id < 10:
-            zone_id_str = f"0{zone_id}"
-
-        self.entity_id = f"{domain}.{slugify(coordinator.device_name)}_{type}_Zone_{zone_id_str}"
+        self._attr_unique_id = f"{coordinator.id}_{type}_Zone_{format_id_base_0(self.zone_id)}"
+        self.entity_id = f"{domain}.{slugify(coordinator.device_name)}_{type}_Zone_{format_id_base_0(self.zone_id)}"
 
     @property
     def device_info(self) -> DeviceInfo:

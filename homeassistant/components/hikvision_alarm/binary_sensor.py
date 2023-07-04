@@ -10,7 +10,7 @@ from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySen
 from dataclasses import dataclass
 
 from .coordinator import HikAlarmDataUpdateCoordinator
-from . import const
+from .const import DOMAIN, DATA_COORDINATOR
 from .model import Zone
 from .entity import HikZoneEntity, HikAlarmEntity
 
@@ -120,7 +120,7 @@ BINARY_SENSORS_ALARM: tuple[HikAlarmBinarySensorDescription, ...] = (
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up a Hikvision ax pro alarm control panel based on a config entry."""
 
-    coordinator: HikAlarmDataUpdateCoordinator = hass.data[const.DOMAIN][entry.entry_id][const.DATA_COORDINATOR]
+    coordinator: HikAlarmDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
 
     @callback
     def async_add_alarm_zone_binary_sensor_entity(zone: Zone, type: str):

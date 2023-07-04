@@ -12,11 +12,9 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_platform
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.event import async_track_point_in_time, async_call_later
 from homeassistant.components.alarm_control_panel import AlarmControlPanelEntity, AlarmControlPanelEntityFeature, DOMAIN as ALARM_CONTROL_PANEL_DOMAIN
-from homeassistant.util import slugify
 
 from . import const
 from .coordinator import HikAlarmDataUpdateCoordinator
