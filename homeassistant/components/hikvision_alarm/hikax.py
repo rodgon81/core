@@ -7,7 +7,7 @@ import requests
 from typing import Any
 from datetime import datetime
 
-from .const import Endpoints, Method, MsgType, UrlApi, ArmType, OutputState
+from .const import Endpoints, Method, MsgType, UrlApi, ArmType, OutputState, ApiPayloadArm
 from . import errors
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ class HikAx:
         self.is_connected = False
         self.url_base = f"http://{self.host}"
 
-    def serialize_object(self, username, encoded_password, session_id, session_id_version):
+    def _serialize_object(self, username, encoded_password, session_id, session_id_version):
         result = f"<SessionLogin>"
         result += f"<userName>{username}</userName>"
         result += f"<password>{encoded_password}</password>"
@@ -44,14 +44,12 @@ class HikAx:
 
         return result
 
-    def get_session_params(self):
+    def _get_session_params(self):
         url = Endpoints.session_capabilities.url.replace("{}", self.username)
-
-        _LOGGER.debug("url: %s", url)
 
         response = requests.get(f"http://{self.username}:{self.password}@{self.host}{url}")
 
-        _LOGGER.debug("response: %s", response.text)
+        _LOGGER.debug("response get_session_params: %s", response.text)
 
         if response.status_code == 200:
             try:
@@ -70,7 +68,7 @@ class HikAx:
         else:
             return None
 
-    def encode_password(self, session_cap: SessionLoginCap):
+    def _encode_password(self, session_cap: SessionLoginCap):
         if session_cap.is_irreversible:
             result = hashlib.sha256(str(f"{self.username}{session_cap.salt}{self.password}").encode("utf-8")).hexdigest()
             result = hashlib.sha256(str(f"{result}{session_cap.challenge}").encode("utf-8")).hexdigest()
@@ -82,17 +80,17 @@ class HikAx:
 
         return result
 
-    def connect(self):
+    def connect_to_alarm(self):
         if self.is_connected:
             return True
 
-        params = self.get_session_params()
+        params = self._get_session_params()
 
         if params is None:
             _LOGGER.error("Respuesta no esperada al pedir parametros de sesion")
             return False
 
-        xml = self.serialize_object(self.username, self.encode_password(params), params.session_id, params.session_id_version)
+        xml = self._serialize_object(self.username, self._encode_password(params), params.session_id, params.session_id_version)
         _LOGGER.debug("xml: %s", xml)
 
         # timestamp: int = datetime.timestamp(datetime.now())
@@ -135,7 +133,7 @@ class HikAx:
         return result
 
     @staticmethod
-    def build_url(url: str, msg_type: MsgType):
+    def _build_url(url: str, msg_type: MsgType):
         is_json: bool = False
 
         if msg_type is MsgType.JSON:
@@ -145,7 +143,7 @@ class HikAx:
 
         return f"{url}{param_prefix}format=json" if is_json else url
 
-    def make_request(self, url: str, msg_type: MsgType, method: Method, data) -> requests.Response | None:
+    def _make_request(self, url: str, msg_type: MsgType, method: Method, data) -> requests.Response | None:
         if self.is_connected:
             headers = {"Cookie": self.cookie}
 
@@ -170,13 +168,13 @@ class HikAx:
 
             return None
 
-    def _base_request(self, url_api: UrlApi, id: int = None, data=None):
+    def _base_request(self, url_api: UrlApi, id: int = None, data: dict = None):
         url = url_api.url.replace("{}", id) if id is not None else url_api.url
-        url = self.build_url(f"{self.url_base}{url}", url_api.msg_type)
+        url = self._build_url(f"{self.url_base}{url}", url_api.msg_type)
 
         _LOGGER.info("Data send: %s", data)
 
-        response = self.make_request(url, url_api.msg_type, url_api.method, data)
+        response = self._make_request(url, url_api.msg_type, url_api.method, data)
 
         if response is None:
             return None
@@ -199,11 +197,11 @@ class HikAx:
 
     # ---
 
-    def users_get_info(self):
-        return self._base_request(Endpoints.users_get_info)
+    def get_user_info(self):
+        return self._base_request(Endpoints.user_info)
 
-    def get_config_user(self, user_id: int):
-        return self._base_request(Endpoints.get_config_user, user_id)
+    def get_user_config(self, user_id: int):
+        return self._base_request(Endpoints.user_config, user_id)
 
     # ---
 
@@ -221,7 +219,7 @@ class HikAx:
 
     # ---
 
-    def area_config(self):
+    def get_area_config(self):
         return self._base_request(Endpoints.area_config)
 
     def area_status(self):
@@ -237,10 +235,16 @@ class HikAx:
         return self._base_request(Endpoints.area_alarm_disarm, area_id)
 
     def area_clear_alarm(self, area_id: int):
-        return self._base_request(Endpoints.area_clear_alarm, area_id)
+        return self._base_request(Endpoints.area_alarm_clear, area_id)
 
-    def master_alarm_arm(self, area_id: int, arm_type: ArmType):
-        data = {"SubSysList": [{"SubSys": {"id": area_id, "armType": arm_type}}]}
+    def master_alarm_arm(self, area_list: list[ApiPayloadArm]):
+        sub_sys: list = []
+
+        for area in area_list:
+            area_config = {"SubSys": {"id": area.area_id, "armType": area.arm_type}}
+            sub_sys.append(area_config)
+
+        data = {"SubSysList": sub_sys}
 
         # {"SubSysList":[{"SubSys":{"id":1,"armType":"stay"}}]}:
         # {"SubSysList":[{"SubSys":{"id":1,"armType":"stay"}},{"SubSys":{"id":29,"armType":"stay"}}]}:
@@ -250,39 +254,70 @@ class HikAx:
 
         return self._base_request(Endpoints.master_alarm_arm, None, data)
 
-    def master_alarm_disarm(self, area_id: int):
-        data = {"SubSysList": [{"SubSys": {"id": area_id}}]}
+    def master_alarm_disarm(self, area_id_list: list[int]):
+        sub_sys: list = []
+
+        for area_id in area_id_list:
+            area_config = {"SubSys": {"id": area_id}}
+            sub_sys.append(area_config)
+
+        data = {"SubSysList": sub_sys}
 
         # {"SubSysList":[{"SubSys":{"id":1}}]}:
         # {"SubSysList":[{"SubSys":{"id":1}},{"SubSys":{"id":29}}]}:
 
         return self._base_request(Endpoints.master_alarm_disarm, None, data)
 
-    def master_clear_alarm(self, area_id: int):
-        data = {"SubSysList": [{"SubSys": {"id": area_id}}]}
+    def master_clear_alarm(self, area_id_list: list[int]):
+        sub_sys: list = []
+
+        for area_id in area_id_list:
+            area_config = {"SubSys": {"id": area_id}}
+            sub_sys.append(area_config)
+
+        data = {"SubSysList": sub_sys}
 
         # {"SubSysList":[{"SubSys":{"id":1}}]}:
         # {"SubSysList":[{"SubSys":{"id":1}},{"SubSys":{"id":29}}]}:
 
-        return self._base_request(Endpoints.master_clear_alarm, None, data)
+        return self._base_request(Endpoints.master_alarm_clear, None, data)
 
-    def arm_fault_status(self, area_id: int):
-        data = {"SubSysList": [{"SubSys": {"id": area_id}}]}
+    def arm_fault_status(self, area_id_list: list[int]):
+        sub_sys: list = []
+
+        for area_id in area_id_list:
+            area_config = {"SubSys": {"id": area_id}}
+            sub_sys.append(area_config)
+
+        data = {"SubSysList": sub_sys}
 
         # {"SubSysList":[{"SubSys":{"id":1}}]}:
         # {"SubSysList":[{"SubSys":{"id":1}},{"SubSys":{"id":29}}]}:
 
         return self._base_request(Endpoints.arm_fault_status, None, data)
 
-    def arm_fault_clear(self, area_id: int):
-        data = {"SubSysList": [{"SubSys": {"id": area_id, "preventFaultArm": False}}]}
+    def arm_fault_clear(self, area_id_list: list[int]):
+        sub_sys: list = []
 
+        for area_id in area_id_list:
+            area_config = {"SubSys": {"id": area_id, "preventFaultArm": False}}
+            sub_sys.append(area_config)
+
+        data = {"SubSysList": sub_sys}
+
+        # {"SubSysList":[{"SubSys":{"id":1,"preventFaultArm":false}}]}:
         # {"SubSysList":[{"SubSys":{"id":1,"preventFaultArm":false}},{"SubSys":{"id":29,"preventFaultArm":false}}]}:
 
         return self._base_request(Endpoints.arm_fault_clear, None, data)
 
-    def arm_status(self, area_id: int):
-        data = {"SubSysList": [{"SubSys": {"id": area_id}}]}
+    def arm_status(self, area_id_list: list[int]):
+        sub_sys: list = []
+
+        for area_id in area_id_list:
+            area_config = {"SubSys": {"id": area_id}}
+            sub_sys.append(area_config)
+
+        data = {"SubSysList": sub_sys}
 
         # {"SubSysList":[{"SubSys":{"id":1}}]}:
         # {"SubSysList":[{"SubSys":{"id":1}},{"SubSys":{"id":29}}]}:
@@ -297,21 +332,37 @@ class HikAx:
     def siren_config(self):
         return self._base_request(Endpoints.siren_config)
 
-    def relay_set_state(self, relay_id: int, relay_state: OutputState):
-        data = {"OutputsCtrl": {"switch": relay_state, "List": [{"id": relay_id}]}}
+    def relay_set_state(self, state: bool, relay_id_list: list[int]):
+        output_id_list: list = []
+
+        for relay_id in relay_id_list:
+            output_id = {"id": relay_id}
+            output_id_list.append(output_id)
+
+        output_state = OutputState.open if state else OutputState.close
+
+        data = {"OutputsCtrl": {"switch": output_state, "List": output_id_list}}
 
         # {"OutputsCtrl":{"switch":"open","List":[{"id":0}]}}:
         # {"OutputsCtrl":{"switch":"close","List":[{"id":0}]}}:
 
-        return self._base_request(Endpoints.relay_set_state, relay_id, data)
+        return self._base_request(Endpoints.relay_set_state, 1, data)
 
-    def siren_set_state(self, siren_id: int, siren_state: OutputState):
-        data = {"SirenCtrl": {"switch": siren_state, "List": [{"id": siren_id}]}}
+    def siren_set_state(self, state: bool, siren_id_list: list[int]):
+        output_id_list: list = []
+
+        for siren_id in siren_id_list:
+            output_id = {"id": siren_id}
+            output_id_list.append(output_id)
+
+        output_state = OutputState.open if state else OutputState.close
+
+        data = {"SirenCtrl": {"switch": output_state, "List": output_id_list}}
 
         # {"SirenCtrl":{"switch":"open","List":[{"id":1}]}}:
         # {"SirenCtrl":{"switch":"close","List":[{"id":1}]}}:
 
-        return self._base_request(Endpoints.siren_set_state, siren_id, data)
+        return self._base_request(Endpoints.siren_set_state, 1, data)
 
     def output_status(self):
         return self._base_request(Endpoints.output_status)

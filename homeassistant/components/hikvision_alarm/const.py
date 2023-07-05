@@ -156,6 +156,12 @@ class OutputState:
     close = "close"
 
 
+class ApiPayloadArm:
+    def __init__(self, area_id: int, arm_type: ArmType):
+        self.area_id: int = area_id
+        self.arm_type: ArmType = arm_type
+
+
 class Endpoints:
     # ---
 
@@ -165,8 +171,8 @@ class Endpoints:
 
     # ---
 
-    users_get_info = UrlApi("/ISAPI/Security/users", Method.GET, MsgType.XML)
-    get_config_user = UrlApi("/ISAPI/Security/UserPermission/{}", Method.GET, MsgType.XML)
+    user_info = UrlApi("/ISAPI/Security/users", Method.GET, MsgType.XML)
+    user_config = UrlApi("/ISAPI/Security/UserPermission/{}", Method.GET, MsgType.XML)
 
     # ---
 
@@ -183,11 +189,11 @@ class Endpoints:
     area_alarm_arm_stay = UrlApi("/ISAPI/SecurityCP/control/arm/{}?ways=stay", Method.PUT, MsgType.JSON)
     area_alarm_arm_away = UrlApi("/ISAPI/SecurityCP/control/arm/{}?ways=away", Method.PUT, MsgType.JSON)
     area_alarm_disarm = UrlApi("/ISAPI/SecurityCP/control/disarm/{}", Method.PUT, MsgType.JSON)
-    area_clear_alarm = UrlApi("/ISAPI/SecurityCP/control/clearAlarm/{}", Method.PUT, MsgType.JSON)
+    area_alarm_clear = UrlApi("/ISAPI/SecurityCP/control/clearAlarm/{}", Method.PUT, MsgType.JSON)
 
     master_alarm_arm = UrlApi("/ISAPI/SecurityCP/control/arm", Method.PUT, MsgType.JSON)
     master_alarm_disarm = UrlApi("/ISAPI/SecurityCP/control/disarm", Method.PUT, MsgType.JSON)
-    master_clear_alarm = UrlApi("/ISAPI/SecurityCP/control/clearAlarm", Method.PUT, MsgType.JSON)
+    master_alarm_clear = UrlApi("/ISAPI/SecurityCP/control/clearAlarm", Method.PUT, MsgType.JSON)
 
     arm_fault_status = UrlApi("/ISAPI/SecurityCP/status/systemFault", Method.POST, MsgType.JSON)
     arm_fault_clear = UrlApi("/ISAPI/SecurityCP/control/systemFault", Method.PUT, MsgType.JSON)
@@ -256,7 +262,13 @@ MODES_TO_SUPPORTED_FEATURES = {
 }
 
 
-ARM_MODES = [STATE_ALARM_ARMED_AWAY, STATE_ALARM_ARMED_HOME, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_CUSTOM_BYPASS, STATE_ALARM_ARMED_VACATION]
+ARM_MODES = [
+    STATE_ALARM_ARMED_AWAY,
+    STATE_ALARM_ARMED_HOME,
+    STATE_ALARM_ARMED_NIGHT,
+    STATE_ALARM_ARMED_CUSTOM_BYPASS,
+    STATE_ALARM_ARMED_VACATION,
+]
 
 SERVICE_ARM_SCHEMA = vol.Schema(
     {

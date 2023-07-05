@@ -277,10 +277,10 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
     def init_device(self):
         _LOGGER.debug("init_device de Coordinator")
 
-        self.axpro.connect()
+        self.axpro.connect_to_alarm()
         self.load_device_info()
 
-        areas_config = self.axpro.area_config()
+        areas_config = self.axpro.get_area_config()
 
         _LOGGER.debug("areas_config: %s", areas_config)
 
@@ -311,14 +311,14 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
             new_area = self.store.async_create_area(data)
             _LOGGER.debug("new_area: %s", new_area)
         # ----------------------------------------------------------
-        users = self.axpro.users_get_info()
+        users = self.axpro.get_user_info()
 
         user_id = 0
         for user in users["UserList"]["User"]:
             if user["userName"] == self.entry.data[const.CONF_HIK_SERVER_CONFIG][const.CONF_HIK_USERNAME]:
                 user_id = user["id"]
 
-        user = self.axpro.get_config_user(user_id)
+        user = self.axpro.get_user_config(user_id)
         subSysOrZoneArm = self.from_bool(user["UserPermission"]["remotePermission"]["subSysOrZoneArm"])
         subSysOrZoneDisarm = self.from_bool(user["UserPermission"]["remotePermission"]["subSysOrZoneDisarm"])
         subSysOrZoneClearArm = self.from_bool(user["UserPermission"]["remotePermission"]["subSysOrZoneClearArm"])

@@ -59,7 +59,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     axpro = HikAx(data[const.CONF_HIK_HOST], data[const.CONF_HIK_USERNAME], data[const.CONF_HIK_PASSWORD])
 
-    if not await hass.async_add_executor_job(axpro.connect):
+    if not await hass.async_add_executor_job(axpro.connect_to_alarm):
         raise InvalidAuth
 
     return {"title": f"{const.DOMAIN}_{data[const.CONF_HIK_HOST]}"}
