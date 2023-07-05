@@ -4,10 +4,10 @@ import urllib.parse
 import xmltodict
 import requests
 
-from typing import Optional, Any
+from typing import Any
 from datetime import datetime
 
-from .const import Endpoints, Method
+from .const import Endpoints, Method, MsgType, UrlApi, ArmType, OutputState
 from . import errors
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,10 +28,11 @@ class HikAx:
 
     def __init__(self, host, username, password):
         self.host = host
-        self.username = username
-        self.password = password
+        self.username = urllib.parse.quote(username)
+        self.password = urllib.parse.quote(password)
         self.cookie = ""
         self.is_connected = False
+        self.url_base = f"http://{self.host}"
 
     def serialize_object(self, username, encoded_password, session_id, session_id_version):
         result = f"<SessionLogin>"
@@ -44,17 +45,13 @@ class HikAx:
         return result
 
     def get_session_params(self):
-        q_user = urllib.parse.quote(self.username)
-        q_password = urllib.parse.quote(self.password)
+        url = Endpoints.session_capabilities.url.replace("{}", self.username)
 
-        response = requests.get(f"http://{q_user}:{q_password}@{self.host}{Endpoints.Session_Capabilities}{q_user}")
+        _LOGGER.debug("url: %s", url)
 
-        _LOGGER.debug("Session_Capabilities response")
-        _LOGGER.debug("Status: %s", response.status_code)
-        _LOGGER.debug("Content: %s", response.content)
-        _LOGGER.debug("Text: %s", response.text)
-        _LOGGER.debug("Headers: %s", response.headers)
-        _LOGGER.debug("End Session_Capabilities response")
+        response = requests.get(f"http://{self.username}:{self.password}@{self.host}{url}")
+
+        _LOGGER.debug("response: %s", response.text)
 
         if response.status_code == 200:
             try:
@@ -82,6 +79,7 @@ class HikAx:
                 result = hashlib.sha256(str(result).encode("utf-8")).hexdigest()
         else:
             result = None
+
         return result
 
     def connect(self):
@@ -95,25 +93,20 @@ class HikAx:
             return False
 
         xml = self.serialize_object(self.username, self.encode_password(params), params.session_id, params.session_id_version)
-
         _LOGGER.debug("xml: %s", xml)
 
-        dt = datetime.now()
-        timestamp = datetime.timestamp(dt)
+        # timestamp: int = datetime.timestamp(datetime.now())
 
-        session_login_url = f"http://{self.host}{Endpoints.Session_Login}?timeStamp={int(timestamp)}"
+        session_login_url = f"{self.url_base}{Endpoints.session_login.url}"
+
+        _LOGGER.debug("session_login_url: %s", session_login_url)
 
         result = False
 
         try:
             login_response: requests.Response = requests.post(session_login_url, xml)
 
-            _LOGGER.debug("Connect response")
-            _LOGGER.debug("Status: %s", login_response.status_code)
-            _LOGGER.debug("Content: %s", login_response.content)
-            _LOGGER.debug("Text: %s", login_response.text)
-            _LOGGER.debug("Headers: %s", login_response.headers)
-            _LOGGER.debug("End connect response")
+            _LOGGER.debug("login_response: %s", login_response.text)
 
             if login_response.status_code == 200:
                 cookie = login_response.headers.get("Set-Cookie")
@@ -133,6 +126,7 @@ class HikAx:
                 self.cookie = cookie
                 self.is_connected = True
 
+                _LOGGER.info("Login exitoso")
                 result = True
         except Exception as e:
             _LOGGER.error("Error in parsing response", exc_info=e)
@@ -141,137 +135,194 @@ class HikAx:
         return result
 
     @staticmethod
-    def build_url(endpoint, is_json: bool = True):
-        param_prefix = "&" if "?" in endpoint else "?"
+    def build_url(url: str, msg_type: MsgType):
+        is_json: bool = False
 
-        return f"{endpoint}{param_prefix}format=json" if is_json else endpoint
+        if msg_type is MsgType.JSON:
+            is_json = True
 
-    def make_request(self, endpoint, method, data=None, is_json: bool = True):
+        param_prefix = "&" if "?" in url else "?"
+
+        return f"{url}{param_prefix}format=json" if is_json else url
+
+    def make_request(self, url: str, msg_type: MsgType, method: Method, data) -> requests.Response | None:
         if self.is_connected:
             headers = {"Cookie": self.cookie}
 
             if method == Method.GET:
-                response = requests.get(endpoint, headers=headers)
+                return requests.get(url, headers=headers)
             elif method == Method.POST:
-                if is_json:
-                    response = requests.post(endpoint, json=data, headers=headers)
+                if msg_type is MsgType.JSON:
+                    return requests.post(url, json=data, headers=headers)
                 else:
-                    response = requests.post(endpoint, data=data, headers=headers)
+                    return requests.post(url, data=data, headers=headers)
             elif method == Method.PUT:
-                if is_json:
-                    # _LOGGER.debug("put DISARM")
-                    # _LOGGER.debug("endpoint %s", endpoint)
-
-                    response = requests.put(endpoint, json=data, headers=headers)
+                if msg_type is MsgType.JSON:
+                    return requests.put(url, json=data, headers=headers)
                 else:
-                    response = requests.put(endpoint, data=data, headers=headers)
+                    return requests.put(url, data=data, headers=headers)
             else:
-                return None
+                _LOGGER.debug("Metodo (%s) no valido", method)
 
-            return response
+                return None
         else:
+            _LOGGER.debug("No estamos conectados al servidor")
+
             return None
 
-    def _base_request(self, url: str, method: Method = Method.GET, data=None, is_json: bool = True):
-        endpoint = self.build_url(url, is_json)
-        response = self.make_request(endpoint, method, data, is_json)
+    def _base_request(self, url_api: UrlApi, id: int = None, data=None):
+        url = url_api.url.replace("{}", id) if id is not None else url_api.url
+        url = self.build_url(f"{self.url_base}{url}", url_api.msg_type)
 
-        # _LOGGER.debug("RESPONSE _base_request %s", response)
+        _LOGGER.info("Data send: %s", data)
+
+        response = self.make_request(url, url_api.msg_type, url_api.method, data)
+
+        if response is None:
+            return None
 
         if response.status_code != 200:
             raise errors.UnexpectedResponseCodeError(response.status_code, response.text)
+
         if response.status_code == 200:
-            if is_json:
+            if url_api.msg_type is MsgType.JSON:
                 return response.json()
+            elif url_api.msg_type is MsgType.XML:
+                return xmltodict.parse(response.text)
             else:
                 return response.text
 
-    def arm_home(self, sub_id: Optional[int] = None):
-        sid = "0xffffffff" if sub_id is None else str(sub_id)
-        response = self._base_request(f"http://{self.host}{Endpoints.Alarm_ArmHome.replace('{}', sid)}", Method.PUT)
+    # ---
 
-        # _LOGGER.debug("response = %s", response)
+    def session_logout(self):
+        return self._base_request(Endpoints.session_logout)
 
-        return response
+    # ---
 
-    def arm_away(self, sub_id: Optional[int] = None):
-        sid = "0xffffffff" if sub_id is None else str(sub_id)
-        response = self._base_request(f"http://{self.host}{Endpoints.Alarm_ArmAway.replace('{}', sid)}", Method.PUT)
+    def users_get_info(self):
+        return self._base_request(Endpoints.users_get_info)
 
-        # _LOGGER.debug("response = %s", response)
+    def get_config_user(self, user_id: int):
+        return self._base_request(Endpoints.get_config_user, user_id)
 
-        return response
+    # ---
 
-    def disarm(self, sub_id: Optional[int] = None):
-        # _LOGGER.debug("disarm en hikax")
-
-        sid = "0xffffffff" if sub_id is None else str(sub_id)
-
-        url = Endpoints.Alarm_Disarm.replace("{}", sid)
-
-        response = self._base_request(f"http://{self.host}{url}", Method.PUT)
-
-        # _LOGGER.debug("response disarm = %s", response)
-
-        return response
-
-    def subsystem_status(self):
-        return self._base_request(f"http://{self.host}{Endpoints.SubSystemStatus}")
-
-    def peripherals_status(self):
-        return self._base_request(f"http://{self.host}{Endpoints.PeripheralsStatus}")
+    def zone_config(self):
+        return self._base_request(Endpoints.zone_config)
 
     def zone_status(self):
-        return self._base_request(f"http://{self.host}{Endpoints.ZoneStatus}")
+        return self._base_request(Endpoints.zone_status)
 
-    def bypass_zone(self, zone_id):
-        return self._base_request(f"http://{self.host}{Endpoints.BypassZone}{zone_id}", Method.PUT)
+    def zone_bypass_on(self, zone_id: int):
+        return self._base_request(Endpoints.zone_bypass_on, zone_id)
 
-    def recover_bypass_zone(self, zone_id):
-        return self._base_request(f"http://{self.host}{Endpoints.RecoverBypassZone}{zone_id}", Method.PUT)
+    def zone_bypass_off(self, zone_id: int):
+        return self._base_request(Endpoints.zone_bypass_off, zone_id)
 
-    def get_area_arm_status(self, area_id):
+    # ---
+
+    def area_config(self):
+        return self._base_request(Endpoints.area_config)
+
+    def area_status(self):
+        return self._base_request(Endpoints.area_status)
+
+    def area_alarm_arm_stay(self, area_id: int):
+        return self._base_request(Endpoints.area_alarm_arm_stay, area_id)
+
+    def area_alarm_arm_away(self, area_id: int):
+        return self._base_request(Endpoints.area_alarm_arm_away, area_id)
+
+    def area_alarm_disarm(self, area_id: int):
+        return self._base_request(Endpoints.area_alarm_disarm, area_id)
+
+    def area_clear_alarm(self, area_id: int):
+        return self._base_request(Endpoints.area_clear_alarm, area_id)
+
+    def master_alarm_arm(self, area_id: int, arm_type: ArmType):
+        data = {"SubSysList": [{"SubSys": {"id": area_id, "armType": arm_type}}]}
+
+        # {"SubSysList":[{"SubSys":{"id":1,"armType":"stay"}}]}:
+        # {"SubSysList":[{"SubSys":{"id":1,"armType":"stay"}},{"SubSys":{"id":29,"armType":"stay"}}]}:
+
+        # {"SubSysList":[{"SubSys":{"id":1,"armType":"away"}}]}:
+        # {"SubSysList":[{"SubSys":{"id":1,"armType":"away"}},{"SubSys":{"id":29,"armType":"away"}}]}:
+
+        return self._base_request(Endpoints.master_alarm_arm, None, data)
+
+    def master_alarm_disarm(self, area_id: int):
         data = {"SubSysList": [{"SubSys": {"id": area_id}}]}
 
-        response = self._base_request(f"http://{self.host}{Endpoints.AreaArmStatus}", Method.POST, data)
+        # {"SubSysList":[{"SubSys":{"id":1}}]}:
+        # {"SubSysList":[{"SubSys":{"id":1}},{"SubSys":{"id":29}}]}:
 
-        return response["ArmStatusList"][0]["ArmStatus"]["status"]
+        return self._base_request(Endpoints.master_alarm_disarm, None, data)
 
-    def host_status(self):
-        return self._base_request(f"http://{self.host}{Endpoints.HostStatus}")
-
-    def siren_status(self):
-        return self._base_request(f"http://{self.host}{Endpoints.SirenStatus}")
-
-    def keypad_status(self):
-        return self._base_request(f"http://{self.host}{Endpoints.KeypadStatus}")
-
-    def repeater_status(self):
-        return self._base_request(f"http://{self.host}{Endpoints.RepeaterStatus}")
-
-    def get_areas_config(self):
-        return self._base_request(f"http://{self.host}{Endpoints.Areas_Config}")
-
-    def get_device_info(self):
-        response = self._base_request(f"http://{self.host}{Endpoints.DeviceInfo}", is_json=False)
-
-        return xmltodict.parse(response)
-
-    def get_users(self):
-        response = self._base_request(f"http://{self.host}{Endpoints.get_users}", is_json=False)
-
-        return xmltodict.parse(response)
-
-    def get_config_user(self, user_id):
-        response = self._base_request(f"http://{self.host}{Endpoints.get_config_user}{user_id}", is_json=False)
-
-        return xmltodict.parse(response)
-
-    def load_devices(self):
-        return self._base_request(f"http://{self.host}{Endpoints.ZonesConfig}")
-
-    def check_arm(self, area_id):
+    def master_clear_alarm(self, area_id: int):
         data = {"SubSysList": [{"SubSys": {"id": area_id}}]}
 
-        response = self._base_request(f"http://{self.host}{Endpoints.systemFault}", Method.POST, data)
-        return response["ArmFault"]["status"]
+        # {"SubSysList":[{"SubSys":{"id":1}}]}:
+        # {"SubSysList":[{"SubSys":{"id":1}},{"SubSys":{"id":29}}]}:
+
+        return self._base_request(Endpoints.master_clear_alarm, None, data)
+
+    def arm_fault_status(self, area_id: int):
+        data = {"SubSysList": [{"SubSys": {"id": area_id}}]}
+
+        # {"SubSysList":[{"SubSys":{"id":1}}]}:
+        # {"SubSysList":[{"SubSys":{"id":1}},{"SubSys":{"id":29}}]}:
+
+        return self._base_request(Endpoints.arm_fault_status, None, data)
+
+    def arm_fault_clear(self, area_id: int):
+        data = {"SubSysList": [{"SubSys": {"id": area_id, "preventFaultArm": False}}]}
+
+        # {"SubSysList":[{"SubSys":{"id":1,"preventFaultArm":false}},{"SubSys":{"id":29,"preventFaultArm":false}}]}:
+
+        return self._base_request(Endpoints.arm_fault_clear, None, data)
+
+    def arm_status(self, area_id: int):
+        data = {"SubSysList": [{"SubSys": {"id": area_id}}]}
+
+        # {"SubSysList":[{"SubSys":{"id":1}}]}:
+        # {"SubSysList":[{"SubSys":{"id":1}},{"SubSys":{"id":29}}]}:
+
+        return self._base_request(Endpoints.arm_status, None, data)
+
+    # ---
+
+    def relay_config(self):
+        return self._base_request(Endpoints.relay_config)
+
+    def siren_config(self):
+        return self._base_request(Endpoints.siren_config)
+
+    def relay_set_state(self, relay_id: int, relay_state: OutputState):
+        data = {"OutputsCtrl": {"switch": relay_state, "List": [{"id": relay_id}]}}
+
+        # {"OutputsCtrl":{"switch":"open","List":[{"id":0}]}}:
+        # {"OutputsCtrl":{"switch":"close","List":[{"id":0}]}}:
+
+        return self._base_request(Endpoints.relay_set_state, relay_id, data)
+
+    def siren_set_state(self, siren_id: int, siren_state: OutputState):
+        data = {"SirenCtrl": {"switch": siren_state, "List": [{"id": siren_id}]}}
+
+        # {"SirenCtrl":{"switch":"open","List":[{"id":1}]}}:
+        # {"SirenCtrl":{"switch":"close","List":[{"id":1}]}}:
+
+        return self._base_request(Endpoints.siren_set_state, siren_id, data)
+
+    def output_status(self):
+        return self._base_request(Endpoints.output_status)
+
+    # ---
+
+    def battery_status(self):
+        return self._base_request(Endpoints.battery_status)
+
+    def communication_status(self):
+        return self._base_request(Endpoints.communication_status)
+
+    def device_info(self):
+        return self._base_request(Endpoints.device_info)

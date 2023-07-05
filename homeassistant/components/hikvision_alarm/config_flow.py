@@ -33,25 +33,20 @@ CONFIGURE_SCHEMA = vol.Schema(
 )
 
 
-def schema_defaults(schema, dps_list=None, **defaults):
+def schema_defaults(schema, **defaults):
     """Create a new schema with default values filled in."""
     copy = schema.extend({})
 
+    _LOGGER.debug("defaults: %s", defaults)
+    _LOGGER.debug("copy: %s", copy)
+
     for field, field_type in copy.schema.items():
-        if isinstance(field_type, vol.In):
-            value = None
-
-            for dps in dps_list or []:
-                if dps.startswith(f"{defaults.get(field)} "):
-                    value = dps
-                    break
-
-            if value in field_type.container:
-                field.default = vol.default_factory(value)
-                continue
-
+        _LOGGER.debug("field.schema: %s", field.schema)
         if field.schema in defaults:
+            _LOGGER.debug("field.default: %s", field.default)
             field.default = vol.default_factory(defaults[field])
+            _LOGGER.debug("field.default: %s", field.default)
+            _LOGGER.debug("vol.default_factory: %s", vol.default_factory)
     return copy
 
 
@@ -137,39 +132,7 @@ class AxProConfigFlow(ConfigFlow, domain=const.DOMAIN):
 
         defaults = user_input or {}
 
-        # return await flow_handler(self, defaults, user_input, "user")
-
-        if user_input is None:
-            return self.async_show_form(
-                step_id="user",
-                data_schema=schema_defaults(CONFIGURE_SCHEMA, **defaults),
-            )
-
-        errors = {}
-
-        try:
-            info = await validate_input(self.hass, user_input)
-        except CannotConnect:
-            errors["base"] = "cannot_connect"
-        except InvalidAuth:
-            errors["base"] = "invalid_auth"
-        except InvalidCode:
-            errors["base"] = "invalid_code"
-        except Exception:
-            _LOGGER.exception("Unexpected exception")
-            errors["base"] = "unknown"
-        else:
-            user_input = await format_config(user_input)
-
-            _LOGGER.debug("Saving options %s %s", info["title"], user_input)
-
-            return self.async_create_entry(title=info["title"], data=user_input)
-
-        return self.async_show_form(
-            step_id="user",
-            data_schema=schema_defaults(CONFIGURE_SCHEMA, None, **defaults),
-            errors=errors,
-        )
+        return await flow_handler(self, defaults, user_input, "user")
 
 
 class AxProOptionsFlowHandler(OptionsFlow):
@@ -181,47 +144,12 @@ class AxProOptionsFlowHandler(OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Manage basic options."""
+        _LOGGER.debug("user_input: %s", user_input)
+
         defaults = self.config_entry.data.copy()
         defaults.update(user_input or {})
 
-        # return await flow_handler(self, defaults, user_input, "init")
-
-        if user_input is None:
-            return self.async_show_form(
-                step_id="init",
-                data_schema=schema_defaults(CONFIGURE_SCHEMA, **defaults),
-            )
-
-        errors = {}
-
-        try:
-            info = await validate_input(self.hass, user_input)
-        except CannotConnect:
-            errors["base"] = "cannot_connect"
-        except InvalidAuth:
-            errors["base"] = "invalid_auth"
-        except InvalidCode:
-            errors["base"] = "invalid_code"
-        except Exception:
-            _LOGGER.exception("Unexpected exception")
-            errors["base"] = "unknown"
-        else:
-            user_input = await format_config(user_input)
-
-            _LOGGER.debug("Saving options %s %s", info["title"], user_input)
-
-            # self.hass.config_entries.async_update_entry(
-            #   self.config_entry,
-            #   data=user_input,
-            # )
-
-            return self.async_create_entry(title=info["title"], data=user_input)
-
-        return self.async_show_form(
-            step_id="init",
-            data_schema=schema_defaults(CONFIGURE_SCHEMA, None, **defaults),
-            errors=errors,
-        )
+        return await flow_handler(self, defaults, user_input, "init")
 
 
 async def flow_handler(self: FlowHandler, defaults, user_input, step: str) -> FlowResult:
@@ -258,7 +186,7 @@ async def flow_handler(self: FlowHandler, defaults, user_input, step: str) -> Fl
 
     return self.async_show_form(
         step_id=step,
-        data_schema=schema_defaults(CONFIGURE_SCHEMA, None, **defaults),
+        data_schema=schema_defaults(CONFIGURE_SCHEMA, **defaults),
         errors=errors,
     )
 

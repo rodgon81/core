@@ -10,6 +10,7 @@ from async_timeout import timeout
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
@@ -19,6 +20,7 @@ from .hikax import HikAx
 from .store import AlarmoStorage
 from .api_class import ModuleType
 
+# from .alarm_control_panel import AlarmoBaseEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,18 +33,23 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
         self.hass: HomeAssistant = hass
         self.store: AlarmoStorage = store
         self.axpro: HikAx = axpro
+
         self.zone_status: Optional[ZonesResponse] = None
         self.siren_status: None
         self.relay_status: None
-        self._subscriptions = []
-        self.entry: ConfigEntry = entry
+
         self.zones: Optional[dict[int, Zone]] = None
+        self.sub_systems: dict[int, SubSys] = {}
+        self.devices: dict[int, ZoneConfig] = {}
+
+        self._subscriptions = []
+
+        self.entry: ConfigEntry = entry
+
+        self.id: Optional[str] = entry.entry_id
         self.device_model: Optional[str] = None
         self.device_name: Optional[str] = None
         self.device_mac: Optional[str] = None
-        self.sub_systems: dict[int, SubSys] = {}
-        self.devices: dict[int, ZoneConfig] = {}
-        self.id: Optional[str] = entry.entry_id
         self.firmware_version: Optional[str] = None
         self.firmware_released_date: Optional[str] = None
         self.batery: Optional[int] = 100
@@ -212,27 +219,27 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
 
         entity_registry = self.hass.helpers.entity_registry.async_get(self.hass)
 
-        if area_id == "master":
-            entity = self.hass.data[const.DOMAIN][self.entry.entry_id]["master"]
+        if area_id == const.DATA_MASTER:
+            entity = self.hass.data[const.DOMAIN][self.entry.entry_id][const.DATA_MASTER]
             entity_registry.async_remove(entity.entity_id)
-            self.hass.data[const.DOMAIN][self.entry.entry_id]["master"] = None
+            self.hass.data[const.DOMAIN][self.entry.entry_id][const.DATA_MASTER] = None
         else:
-            entity = self.hass.data[const.DOMAIN][self.entry.entry_id]["areas"][area_id]
+            entity = self.hass.data[const.DOMAIN][self.entry.entry_id][const.DATA_AREAS][area_id]
             entity_registry.async_remove(entity.entity_id)
-            self.hass.data[const.DOMAIN][self.entry.entry_id]["areas"].pop(area_id, None)
+            self.hass.data[const.DOMAIN][self.entry.entry_id][const.DATA_AREAS].pop(area_id, None)
 
     async def async_unload(self):
         """remove all alarmo objects"""
         _LOGGER.debug("async_unload de Coordinator")
 
         # remove alarm_control_panel entities
-        areas = list(self.hass.data[const.DOMAIN][self.entry.entry_id]["areas"].keys())
+        areas = list(self.hass.data[const.DOMAIN][self.entry.entry_id][const.DATA_AREAS].keys())
 
         for area in areas:
             await self.async_remove_entity(area)
 
-        if self.hass.data[const.DOMAIN][self.entry.entry_id]["master"]:
-            await self.async_remove_entity("master")
+        if self.hass.data[const.DOMAIN][self.entry.entry_id][const.DATA_MASTER]:
+            await self.async_remove_entity(const.DATA_MASTER)
 
         # remove subscriptions for coordinator
         while len(self._subscriptions):
@@ -273,7 +280,7 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
         self.axpro.connect()
         self.load_device_info()
 
-        areas_config = self.axpro.get_areas_config()
+        areas_config = self.axpro.area_config()
 
         _LOGGER.debug("areas_config: %s", areas_config)
 
@@ -304,7 +311,7 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
             new_area = self.store.async_create_area(data)
             _LOGGER.debug("new_area: %s", new_area)
         # ----------------------------------------------------------
-        users = self.axpro.get_users()
+        users = self.axpro.users_get_info()
 
         user_id = 0
         for user in users["UserList"]["User"]:
@@ -329,7 +336,7 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
         self._update_zones()
 
     def load_device_info(self):
-        device_info = self.axpro.get_device_info()
+        device_info = self.axpro.device_info()
 
         if device_info is not None:
             self.device_mac = device_info["DeviceInfo"]["macAddress"]
@@ -339,7 +346,7 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
             self.firmware_released_date = device_info["DeviceInfo"]["firmwareReleasedDate"]
 
     def load_zones(self):
-        devices = ZonesConf.from_dict(self.axpro.load_devices())
+        devices = ZonesConf.from_dict(self.axpro.zone_config())
 
         if devices is not None:
             self.devices = {}
@@ -350,7 +357,7 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
     def _update_areas(self) -> None:
         """Fetch data from axpro via sync functions."""
         status = const.STATE_ALARM_DISARMED
-        status_json = self.axpro.subsystem_status()
+        status_json = self.axpro.area_status()
 
         try:
             subsys_resp = SubSystemResponse.from_dict(status_json)
@@ -412,10 +419,10 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
     async def async_arm_home(self, sub_id: Optional[int] = None):
         """Arm alarm panel in home state."""
 
-        is_success = await self.hass.async_add_executor_job(self.axpro.arm_home, sub_id)
+        is_success = await self.hass.async_add_executor_job(self.axpro.area_alarm_arm_stay, sub_id)
 
         if is_success:
-            await self.hass.async_add_executor_job(self.axpro.check_arm, sub_id)
+            await self.hass.async_add_executor_job(self.axpro.arm_fault_status, sub_id)
 
             await self._async_update_data()
             await self.async_request_refresh()
@@ -423,10 +430,10 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
     async def async_arm_away(self, sub_id: Optional[int] = None):
         """Arm alarm panel in away state"""
 
-        is_success = await self.hass.async_add_executor_job(self.axpro.arm_away, sub_id)
+        is_success = await self.hass.async_add_executor_job(self.axpro.area_alarm_arm_away, sub_id)
 
         if is_success:
-            await self.hass.async_add_executor_job(self.axpro.check_arm, sub_id)
+            await self.hass.async_add_executor_job(self.axpro.arm_fault_status, sub_id)
 
             await self._async_update_data()
             await self.async_request_refresh()
@@ -436,7 +443,7 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
 
         _LOGGER.debug("async_disarm apretado en init")
 
-        is_success = await self.hass.async_add_executor_job(self.axpro.disarm, sub_id)
+        is_success = await self.hass.async_add_executor_job(self.axpro.area_alarm_disarm, sub_id)
 
         if is_success:
             await self._async_update_data()

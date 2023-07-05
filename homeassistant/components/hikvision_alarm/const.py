@@ -127,37 +127,87 @@ COMMAND_DISARM = "disarm"
 SENSOR_TYPE_OTHER = "other"
 
 
-class Endpoints:
-    Session_Capabilities = "/ISAPI/Security/sessionLogin/capabilities?username="
-    Session_Login = "/ISAPI/Security/sessionLogin"
-    Session_Logout = "/ISAPI/Security/sessionLogout"
-    Alarm_Disarm = "/ISAPI/SecurityCP/control/disarm/{}"
-    Alarm_ArmAway = "/ISAPI/SecurityCP/control/arm/{}?ways=away"
-    Alarm_ArmHome = "/ISAPI/SecurityCP/control/arm/{}?ways=stay"
-    SubSystemStatus = "/ISAPI/SecurityCP/status/subSystems"
-    ZonesConfig = "/ISAPI/SecurityCP/Configuration/zones"
-    Areas_Config = "/ISAPI/SecurityCP/Configuration/subSys"
-    HostStatus = "/ISAPI/SecurityCP/status/host"
-    PeripheralsStatus = "/ISAPI/SecurityCP/status/exDevStatus"
-    ZoneStatus = "/ISAPI/SecurityCP/status/zones"
-    BypassZone = "/ISAPI/SecurityCP/control/bypass/"
-    RecoverBypassZone = "/ISAPI/SecurityCP/control/Recoverbypass/"
-    AreaArmStatus = "/ISAPI/SecurityCP/status/armStatus"
-    SirenStatus = "/ISAPI/SecurityCP/status/sirenStatus"
-    RepeaterStatus = "/ISAPI/SecurityCP/status/repeaterStatus"
-    KeypadStatus = "/ISAPI/SecurityCP/status/keypadStatus"
-    DeviceInfo = "/ISAPI/System/deviceInfo"
-    systemFault = "/ISAPI/SecurityCP/status/systemFault"
-
-    get_users = "/ISAPI/Security/users"
-    get_config_user = "/ISAPI/Security/UserPermission/"
-
-
 class Method:
     GET = "GET"
     POST = "POST"
     PUT = "PUT"
     DELETE = "DELETE"
+
+
+class MsgType:
+    XML = "xml"
+    JSON = "json"
+
+
+class ArmType:
+    AWAY = "away"
+    STAY = "stay"
+
+
+class UrlApi:
+    def __init__(self, url, method, msg_type):
+        self.url: str = url
+        self.method: Method = method
+        self.msg_type: MsgType = msg_type
+
+
+class OutputState:
+    open = "open"
+    close = "close"
+
+
+class Endpoints:
+    # ---
+
+    session_capabilities = UrlApi("/ISAPI/Security/sessionLogin/capabilities?username={}", Method.GET, MsgType.XML)
+    session_login = UrlApi("/ISAPI/Security/sessionLogin", Method.POST, MsgType.XML)
+    session_logout = UrlApi("/ISAPI/Security/sessionLogout", Method.PUT, MsgType.XML)
+
+    # ---
+
+    users_get_info = UrlApi("/ISAPI/Security/users", Method.GET, MsgType.XML)
+    get_config_user = UrlApi("/ISAPI/Security/UserPermission/{}", Method.GET, MsgType.XML)
+
+    # ---
+
+    zone_config = UrlApi("/ISAPI/SecurityCP/Configuration/zones", Method.GET, MsgType.JSON)
+    zone_status = UrlApi("/ISAPI/SecurityCP/status/zones", Method.GET, MsgType.JSON)
+    zone_bypass_on = UrlApi("/ISAPI/SecurityCP/control/bypass/{}", Method.PUT, MsgType.JSON)
+    zone_bypass_off = UrlApi("/ISAPI/SecurityCP/control/bypassRecover/{}", Method.PUT, MsgType.JSON)
+
+    # ---
+
+    area_config = UrlApi("/ISAPI/SecurityCP/Configuration/subSys", Method.GET, MsgType.JSON)
+    area_status = UrlApi("/ISAPI/SecurityCP/status/subSystems", Method.GET, MsgType.JSON)
+
+    area_alarm_arm_stay = UrlApi("/ISAPI/SecurityCP/control/arm/{}?ways=stay", Method.PUT, MsgType.JSON)
+    area_alarm_arm_away = UrlApi("/ISAPI/SecurityCP/control/arm/{}?ways=away", Method.PUT, MsgType.JSON)
+    area_alarm_disarm = UrlApi("/ISAPI/SecurityCP/control/disarm/{}", Method.PUT, MsgType.JSON)
+    area_clear_alarm = UrlApi("/ISAPI/SecurityCP/control/clearAlarm/{}", Method.PUT, MsgType.JSON)
+
+    master_alarm_arm = UrlApi("/ISAPI/SecurityCP/control/arm", Method.PUT, MsgType.JSON)
+    master_alarm_disarm = UrlApi("/ISAPI/SecurityCP/control/disarm", Method.PUT, MsgType.JSON)
+    master_clear_alarm = UrlApi("/ISAPI/SecurityCP/control/clearAlarm", Method.PUT, MsgType.JSON)
+
+    arm_fault_status = UrlApi("/ISAPI/SecurityCP/status/systemFault", Method.POST, MsgType.JSON)
+    arm_fault_clear = UrlApi("/ISAPI/SecurityCP/control/systemFault", Method.PUT, MsgType.JSON)
+    arm_status = UrlApi("/ISAPI/SecurityCP/status/armStatus", Method.POST, MsgType.JSON)
+
+    # ---
+
+    relay_config = UrlApi("/ISAPI/SecurityCP/Configuration/outputsModule", Method.GET, MsgType.JSON)
+    siren_config = UrlApi("/ISAPI/SecurityCP/Configuration/wirelessSiren", Method.GET, MsgType.JSON)
+
+    relay_set_state = UrlApi("/ISAPI/SecurityCP/control/outputs/{}", Method.PUT, MsgType.JSON)
+    siren_set_state = UrlApi("/ISAPI/SecurityCP/control/siren/{}", Method.PUT, MsgType.JSON)
+
+    output_status = UrlApi("/ISAPI/SecurityCP/status/exDevStatus", Method.GET, MsgType.JSON)
+
+    # ---
+
+    battery_status = UrlApi("/ISAPI/SecurityCP/status/batteries", Method.GET, MsgType.JSON)
+    communication_status = UrlApi("/ISAPI/SecurityCP/status/communication", Method.GET, MsgType.JSON)
+    device_info = UrlApi("/ISAPI/System/deviceInfo", Method.GET, MsgType.XML)
 
 
 SERVICE_ARM = "arm"
