@@ -15,7 +15,25 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from . import const
-from .model import ZonesResponse, Zone, SubSystemResponse, SubSys, Arming, ZonesConf, ZoneConfig
+from .model import (
+    ZonesStatus,
+    ZoneStatus,
+    SubSystemResponse,
+    SubSys,
+    Arming,
+    ZonesConf,
+    ZoneConfig,
+    SirenStatusList,
+    RelaysConf,
+    RelayConfig,
+    SirensConf,
+    RelayStatusList,
+    SirenConfig,
+    SirensStatus,
+    RelaysStatus,
+    SirenStatus,
+    RelayStatus,
+)
 from .hikax import HikAx
 from .store import AlarmoStorage
 from .api_class import ModuleType
@@ -34,13 +52,16 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
         self.store: AlarmoStorage = store
         self.axpro: HikAx = axpro
 
-        self.zone_status: Optional[ZonesResponse] = None
-        self.siren_status: None
-        self.relay_status: None
+        self.zone_status: Optional[ZonesStatus] = None
+        self.siren_status: dict[int, SirenStatus] = None
+        self.relay_status: dict[int, RelayStatus] = None
 
-        self.zones: Optional[dict[int, Zone]] = None
+        self.zones: Optional[dict[int, ZoneStatus]] = None
         self.sub_systems: dict[int, SubSys] = {}
-        self.devices: dict[int, ZoneConfig] = {}
+
+        self.zone_config: dict[int, ZoneConfig] = {}
+        self.relay_config: dict[int, RelayConfig] = {}
+        self.siren_config: dict[int, SirenConfig] = {}
 
         self._subscriptions = []
 
@@ -62,6 +83,7 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
         self._subscriptions.append(async_dispatcher_connect(hass, "hik_button_platform_loaded", self.setup_button_platform_entities))
         self._subscriptions.append(async_dispatcher_connect(hass, "hik_binary_sensor_platform_loaded", self.setup_binary_sensor_platform_entities))
         self._subscriptions.append(async_dispatcher_connect(hass, "hik_sensor_platform_loaded", self.setup_sensor_platform_entities))
+        self._subscriptions.append(async_dispatcher_connect(hass, "hik_switch_platform_loaded", self.setup_switch_platform_entities))
 
         super().__init__(hass, _LOGGER, name=const.DOMAIN, update_interval=timedelta(seconds=self.entry.data[const.CONF_HIK_SCAN_INTERVAL]))
 
@@ -97,7 +119,7 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
 
         if self.zone_status is not None:
             for zone in self.zone_status.zone_list:
-                zone_config = self.devices.get(zone.zone.id)
+                zone_config = self.zone_config.get(zone.zone.id)
 
                 if zone.zone.tamper_evident is not None:
                     async_dispatcher_send(self.hass, "hik_register_zone_binary_sensor", zone.zone, "tamper_evident")
@@ -113,12 +135,23 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
         async_dispatcher_send(self.hass, "hik_register_alarm_binary_sensor")
 
     @callback
+    def setup_switch_platform_entities(self):
+        _LOGGER.debug("setup_switch_platform_entities de Coordinator")
+
+        relay_status: RelayStatus
+
+        if self.relay_status is not None:
+            for relay_status in self.relay_status.values():
+                if relay_status.status is not None:
+                    async_dispatcher_send(self.hass, "hik_register_relay_switch", relay_status, "relay_state")
+
+    @callback
     def setup_sensor_platform_entities(self):
         _LOGGER.debug("setup_sensor_platform_entities de Coordinator")
 
         if self.zone_status is not None:
             for zone in self.zone_status.zone_list:
-                zone_config = self.devices.get(zone.zone.id)
+                zone_config = self.zone_config.get(zone.zone.id)
 
                 if zone.zone.status is not None:
                     async_dispatcher_send(self.hass, "hik_register_zone_sensor", zone.zone, "status")
@@ -257,6 +290,15 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
         except (asyncio.TimeoutError, ConnectionError) as ex:
             raise ConfigEntryNotReady from ex
 
+    async def set_state_relay(self, state: bool, id: int):
+        """Handle reload service call."""
+        _LOGGER.info("state_on_relay")
+        is_success = await self.hass.async_add_executor_job(self.axpro.relay_set_state, state, [id])
+
+        if is_success:
+            await self._async_update_data()
+            await self.async_request_refresh()
+
     def from_bool(self, value: Any) -> bool:
         """Convert string value to boolean."""
         if isinstance(value, bool):
@@ -332,7 +374,10 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("CONF_HIK_ALARM_CONFIG: %s", self.entry.data[const.CONF_HIK_ALARM_CONFIG])
 
         self.load_zones()
+        self.load_relays()
+        self.load_sirens()
         self._update_areas()
+        self._update_relays_and_sirens()
         self._update_zones()
 
     def load_device_info(self):
@@ -346,13 +391,31 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
             self.firmware_released_date = device_info["DeviceInfo"]["firmwareReleasedDate"]
 
     def load_zones(self):
-        devices = ZonesConf.from_dict(self.axpro.zone_config())
+        zone_config = ZonesConf.from_dict(self.axpro.zone_config())
 
-        if devices is not None:
-            self.devices = {}
+        if zone_config is not None:
+            self.zone_config = {}
 
-            for item in devices.list:
-                self.devices[item.zone.id] = item.zone
+            for item in zone_config.list:
+                self.zone_config[item.zone.id] = item.zone
+
+    def load_relays(self):
+        relay_config = RelaysConf.from_dict(self.axpro.relay_config())
+
+        if relay_config is not None:
+            self.relay_config = {}
+
+            for item in relay_config.list:
+                self.relay_config[item.relay.id] = item.relay
+
+    def load_sirens(self):
+        siren_config = SirensConf.from_dict(self.axpro.siren_config())
+
+        if siren_config is not None:
+            self.siren_config = {}
+
+            for item in siren_config.list:
+                self.siren_config[item.siren.id] = item.siren
 
     def _update_areas(self) -> None:
         """Fetch data from axpro via sync functions."""
@@ -398,7 +461,7 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
         zone_response = self.axpro.zone_status()
         # _LOGGER.debug("Zones: %s", zone_response)
 
-        zone_status = ZonesResponse.from_dict(zone_response)
+        zone_status = ZonesStatus.from_dict(zone_response)
         self.zone_status = zone_status
 
         zones = {}
@@ -406,6 +469,30 @@ class HikAlarmDataUpdateCoordinator(DataUpdateCoordinator):
             zones[zone.zone.id] = zone.zone
 
         self.zones = zones
+
+    def _update_relays_and_sirens(self) -> None:
+        """Fetch data from axpro via sync functions."""
+        output_response = self.axpro.output_status()
+        # _LOGGER.debug("Zones: %s", zone_response)
+
+        relay_status = RelaysStatus.from_dict(output_response)
+        siren_status = SirensStatus.from_dict(output_response)
+
+        relays = {}
+        relay: RelayStatusList
+
+        for relay in relay_status.relay_list:
+            relays[relay.relay.id] = relay.relay
+
+        self.relay_status = relays
+
+        sirens = {}
+        siren: SirenStatusList
+
+        for siren in siren_status.siren_list:
+            sirens[siren.siren.id] = siren.siren
+
+        self.siren_status = sirens
 
     async def _async_update_data(self) -> None:
         """Fetch data from Axpro."""

@@ -46,7 +46,13 @@ DATA_COORDINATOR: Final[str] = "coordinator"
 DATA_AREAS: Final[str] = "areas"
 DATA_MASTER: Final[str] = "master"
 
-PLATFORMS: list[Platform] = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENSOR, Platform.BUTTON]
+PLATFORMS: list[Platform] = [
+    Platform.ALARM_CONTROL_PANEL,
+    Platform.BINARY_SENSOR,
+    Platform.SENSOR,
+    Platform.BUTTON,
+    Platform.SWITCH,
+]
 
 NAME = "Alarm"
 MANUFACTURER = "Hikvision"

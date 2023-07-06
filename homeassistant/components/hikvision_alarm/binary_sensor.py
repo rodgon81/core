@@ -11,15 +11,15 @@ from dataclasses import dataclass
 
 from .coordinator import HikAlarmDataUpdateCoordinator
 from .const import DOMAIN, DATA_COORDINATOR
-from .model import Zone
-from .entity import HikZoneEntity, HikAlarmEntity
+from .model import ZoneStatus
+from .entity import HikGroupEntity, HikAlarmEntity
 
 
 @dataclass
 class HikZoneBinarySensorDescriptionMixin:
     """Mixin to describe a Hikvision Alarm Button entity."""
 
-    value_fn: Callable[[Zone], None]
+    value_fn: Callable[[ZoneStatus], None]
     domain: str
 
 
@@ -123,8 +123,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     coordinator: HikAlarmDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
 
     @callback
-    def async_add_alarm_zone_binary_sensor_entity(zone: Zone, type: str):
-        binary_sensor_entity = HikZoneBinarySensor(coordinator, zone, BINARY_SENSORS_ZONE[type])
+    def async_add_alarm_zone_binary_sensor_entity(zone_status: ZoneStatus, type: str):
+        binary_sensor_entity = HikZoneBinarySensor(coordinator, zone_status, BINARY_SENSORS_ZONE[type])
 
         async_add_entities([binary_sensor_entity])
 
@@ -139,15 +139,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     async_dispatcher_send(hass, "hik_binary_sensor_platform_loaded")
 
 
-class HikZoneBinarySensor(HikZoneEntity, BinarySensorEntity):
+class HikZoneBinarySensor(HikGroupEntity, BinarySensorEntity):
     """Representation of Hikvision tamper_evident detection."""
 
-    def __init__(self, coordinator: HikAlarmDataUpdateCoordinator, zone: Zone, entity_description: HikZoneBinarySensorDescription) -> None:
+    def __init__(self, coordinator: HikAlarmDataUpdateCoordinator, zone_status: ZoneStatus, entity_description: HikZoneBinarySensorDescription) -> None:
         """Create the entity with a DataUpdateCoordinator."""
 
         self.entity_description: HikZoneBinarySensorDescription = entity_description
 
-        super().__init__(coordinator, zone.id, self.entity_description.key, self.entity_description.domain)
+        super().__init__(coordinator, zone_status.id, self.entity_description.key, self.entity_description.domain, "zone")
 
     @property
     def icon(self) -> str | None:

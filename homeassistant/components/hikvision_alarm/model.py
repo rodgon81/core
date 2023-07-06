@@ -20,15 +20,7 @@ from .api_class import (
     Relator,
     DetectorType,
     TimeoutType,
-    NewKeyZoneTriggerTypeCFG,
-    ZoneStatusCFG,
-    ChimeWarningType,
-    ArmModeConf,
     ZoneAttrib,
-    DetectorAccessMode,
-    DetectorWiringMode,
-    AMMode,
-    AccessModuleType,
     ModuleType,
 )
 
@@ -39,33 +31,7 @@ EnumT = TypeVar("EnumT", bound=Enum)
 
 
 @dataclass
-class InputList:
-    id: int
-    enabled: bool
-    mode: str
-
-    @staticmethod
-    def from_dict(obj: Any) -> "InputList":
-        assert isinstance(obj, dict)
-
-        id = from_int(obj.get("id"))
-        enabled = from_bool(obj.get("enabled"))
-        mode = from_str(obj.get("mode"))
-
-        return InputList(id, enabled, mode)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-
-        result["id"] = from_int(self.id)
-        result["enabled"] = from_bool(self.enabled)
-        result["mode"] = from_str(self.mode)
-
-        return result
-
-
-@dataclass
-class Zone:
+class ZoneStatus:
     id: int
     name: str
     status: Optional[Status]
@@ -78,7 +44,7 @@ class Zone:
     signal: Optional[int]
 
     @staticmethod
-    def from_dict(obj: Any) -> "Zone":
+    def from_dict(obj: Any) -> "ZoneStatus":
         assert isinstance(obj, dict)
 
         id = from_int(obj.get("id"))
@@ -92,7 +58,7 @@ class Zone:
         zone_type = from_union([ZoneType, from_none], obj.get("zoneType"))
         signal = from_union([from_int, from_none], obj.get("signal"))
 
-        return Zone(
+        return ZoneStatus(
             id,
             name,
             status,
@@ -123,41 +89,197 @@ class Zone:
 
 
 @dataclass
-class ZoneList:
-    zone: Zone
+class ZoneStatusList:
+    zone: ZoneStatus
 
     @staticmethod
-    def from_dict(obj: Any) -> "ZoneList":
+    def from_dict(obj: Any) -> "ZoneStatusList":
         assert isinstance(obj, dict)
 
-        zone = Zone.from_dict(obj.get("Zone"))
+        zone = ZoneStatus.from_dict(obj.get("Zone"))
 
-        return ZoneList(zone)
+        return ZoneStatusList(zone)
 
     def to_dict(self) -> dict:
         result: dict = {}
 
-        result["Zone"] = to_class(Zone, self.zone)
+        result["Zone"] = to_class(ZoneStatus, self.zone)
 
         return result
 
 
 @dataclass
-class ZonesResponse:
-    zone_list: List[ZoneList]
+class ZonesStatus:
+    zone_list: List[ZoneStatusList]
 
     @staticmethod
-    def from_dict(obj: Any) -> "ZonesResponse":
+    def from_dict(obj: Any) -> "ZonesStatus":
         assert isinstance(obj, dict)
 
-        zone_list = from_list(ZoneList.from_dict, obj.get("ZoneList"))
+        zone_list = from_list(ZoneStatusList.from_dict, obj.get("ZoneList"))
 
-        return ZonesResponse(zone_list)
+        return ZonesStatus(zone_list)
 
     def to_dict(self) -> dict:
         result: dict = {}
 
-        result["ZoneList"] = from_list(lambda x: to_class(ZoneList, x), self.zone_list)
+        result["ZoneList"] = from_list(lambda x: to_class(ZoneStatusList, x), self.zone_list)
+
+        return result
+
+
+@dataclass
+class SirenStatus:
+    id: int
+    name: str
+    status: bool
+    tamper_evident: bool
+    siren_attrib: str
+
+    @staticmethod
+    def from_dict(obj: Any) -> "SirenStatus":
+        assert isinstance(obj, dict)
+
+        id = from_int(obj.get("id"))
+        name = from_str(obj.get("name"))
+        status = True if obj.get("status") == "on" else False
+        tamper_evident = from_bool(obj.get("tamperEvident"))
+        siren_attrib = from_str(obj.get("sirenAttrib"))
+
+        return SirenStatus(
+            id,
+            name,
+            status,
+            tamper_evident,
+            siren_attrib,
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+
+        result["id"] = from_int(self.id)
+        result["name"] = from_str(self.name)
+        result["status"] = from_bool(self.status)
+        result["tamperEvident"] = from_bool(self.tamper_evident)
+        result["sirenAttrib"] = from_str(self.siren_attrib)
+
+        return result
+
+
+@dataclass
+class SirenStatusList:
+    siren: SirenStatus
+
+    @staticmethod
+    def from_dict(obj: Any) -> "SirenStatusList":
+        assert isinstance(obj, dict)
+
+        siren = SirenStatus.from_dict(obj.get("Siren"))
+
+        return SirenStatusList(siren)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+
+        result["Siren"] = to_class(SirenStatus, self.siren)
+
+        return result
+
+
+@dataclass
+class SirensStatus:
+    siren_list: List[SirenStatusList]
+
+    @staticmethod
+    def from_dict(obj: Any) -> "SirensStatus":
+        assert isinstance(obj, dict)
+
+        pre_obj = obj.get("ExDevStatus")
+        assert isinstance(pre_obj, dict)
+        siren_list = from_list(SirenStatusList.from_dict, pre_obj.get("SirenList"))
+
+        return SirensStatus(siren_list)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+
+        result["SirenList"] = from_list(lambda x: to_class(ZoneStatusList, x), self.siren_list)
+
+        return result
+
+
+@dataclass
+class RelayStatus:
+    id: int
+    name: str
+    status: bool
+    tamper_evident: bool
+
+    @staticmethod
+    def from_dict(obj: Any) -> "RelayStatus":
+        assert isinstance(obj, dict)
+
+        id = from_int(obj.get("id"))
+        name = from_str(obj.get("name"))
+        status = True if obj.get("status") == "on" else False
+        tamper_evident = from_bool(obj.get("tamperEvident"))
+
+        return RelayStatus(
+            id,
+            name,
+            status,
+            tamper_evident,
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+
+        result["id"] = from_int(self.id)
+        result["name"] = from_str(self.name)
+        result["status"] = from_bool(self.status)
+        result["tamperEvident"] = from_bool(self.tamper_evident)
+
+        return result
+
+
+@dataclass
+class RelayStatusList:
+    relay: RelayStatus
+
+    @staticmethod
+    def from_dict(obj: Any) -> "RelayStatusList":
+        assert isinstance(obj, dict)
+
+        relay = RelayStatus.from_dict(obj.get("Output"))
+
+        return RelayStatusList(relay)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+
+        result["Output"] = to_class(RelayStatus, self.relay)
+
+        return result
+
+
+@dataclass
+class RelaysStatus:
+    relay_list: List[RelayStatusList]
+
+    @staticmethod
+    def from_dict(obj: Any) -> "RelaysStatus":
+        assert isinstance(obj, dict)
+
+        pre_obj = obj.get("ExDevStatus")
+        assert isinstance(pre_obj, dict)
+        relay_list = from_list(RelayStatusList.from_dict, pre_obj.get("OutputList"))
+
+        return RelaysStatus(relay_list)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+
+        result["OutputList"] = from_list(lambda x: to_class(RelayStatusList, x), self.relay_list)
 
         return result
 
@@ -238,41 +360,6 @@ class SubSystemResponse:
 
 
 @dataclass
-class CrossZoneCFG:
-    is_associated: bool
-    support_associated_zone: List[int]
-    already_associated_zone: List[Any]
-    support_linkage_channel_id: List[Any]
-    already_linkage_channel_id: List[Any]
-    associate_time: int
-
-    @staticmethod
-    def from_dict(obj: Any) -> "CrossZoneCFG":
-        assert isinstance(obj, dict)
-
-        is_associated = from_bool(obj.get("isAssociated"))
-        support_associated_zone = from_list(from_int, obj.get("supportAssociatedZone"))
-        already_associated_zone = from_list(lambda x: x, obj.get("alreadyAssociatedZone"))
-        support_linkage_channel_id = from_list(lambda x: x, obj.get("supportLinkageChannelID"))
-        already_linkage_channel_id = from_list(lambda x: x, obj.get("alreadyLinkageChannelID"))
-        associate_time = from_int(obj.get("associateTime"))
-
-        return CrossZoneCFG(is_associated, support_associated_zone, already_associated_zone, support_linkage_channel_id, already_linkage_channel_id, associate_time)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-
-        result["isAssociated"] = from_bool(self.is_associated)
-        result["supportAssociatedZone"] = from_list(from_int, self.support_associated_zone)
-        result["alreadyAssociatedZone"] = from_list(lambda x: x, self.already_associated_zone)
-        result["supportLinkageChannelID"] = from_list(lambda x: x, self.support_linkage_channel_id)
-        result["alreadyLinkageChannelID"] = from_list(lambda x: x, self.already_linkage_channel_id)
-        result["associateTime"] = from_int(self.associate_time)
-
-        return result
-
-
-@dataclass
 class RelatedChan:
     camera_seq: str
     related_chan: int
@@ -317,32 +404,6 @@ class RelatedChanList:
         result: dict = {}
 
         result["RelatedChan"] = to_class(RelatedChan, self.related_chan)
-
-        return result
-
-
-@dataclass
-class RelatedPIRCAM:
-    support_linkage_zones: List[Any]
-    linkage_zone: List[Any]
-    linkage_pircam_name: str
-
-    @staticmethod
-    def from_dict(obj: Any) -> "RelatedPIRCAM":
-        assert isinstance(obj, dict)
-
-        support_linkage_zones = from_list(lambda x: x, obj.get("supportLinkageZones"))
-        linkage_zone = from_list(lambda x: x, obj.get("linkageZone"))
-        linkage_pircam_name = from_str(obj.get("linkagePIRCAMName"))
-
-        return RelatedPIRCAM(support_linkage_zones, linkage_zone, linkage_pircam_name)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-
-        result["supportLinkageZones"] = from_list(lambda x: x, self.support_linkage_zones)
-        result["linkageZone"] = from_list(lambda x: x, self.linkage_zone)
-        result["linkagePIRCAMName"] = from_str(self.linkage_pircam_name)
 
         return result
 
@@ -538,5 +599,137 @@ class ZonesConf:
         result: dict = {}
 
         result["List"] = from_list(lambda x: to_class(ListElement, x), self.list)
+
+        return result
+
+
+@dataclass
+class RelayConfig:
+    id: int
+    name: str
+
+    @staticmethod
+    def from_dict(obj: Any, relay_id) -> "RelayConfig":
+        assert isinstance(obj, dict)
+
+        id = from_int(relay_id)
+        name = from_str(obj.get("name"))
+
+        return RelayConfig(
+            id,
+            name,
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+
+        result["id"] = from_int(self.id)
+        result["name"] = from_str(self.name)
+
+        return result
+
+
+@dataclass
+class ListElementRelays:
+    relay: RelayConfig
+
+    @staticmethod
+    def from_dict(obj: Any) -> "ListElementRelays":
+        assert isinstance(obj, dict)
+
+        relay = RelayConfig.from_dict(obj.get("OutPutModule"), obj.get("id"))
+
+        return ListElementRelays(relay)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+
+        result["OutPutModule"] = to_class(RelayConfig, self.relay)
+
+        return result
+
+
+@dataclass
+class RelaysConf:
+    list: List[ListElementRelays]
+
+    @staticmethod
+    def from_dict(obj: Any) -> "RelaysConf":
+        assert isinstance(obj, dict)
+
+        list = from_list(ListElementRelays.from_dict, obj.get("List"))
+
+        return RelaysConf(list)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+
+        result["List"] = from_list(lambda x: to_class(ListElementRelays, x), self.list)
+
+        return result
+
+
+@dataclass
+class SirenConfig:
+    id: int
+    name: str
+
+    @staticmethod
+    def from_dict(obj: Any) -> "SirenConfig":
+        assert isinstance(obj, dict)
+
+        id = from_int(obj.get("id"))
+        name = from_str(obj.get("name"))
+
+        return SirenConfig(
+            id,
+            name,
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+
+        result["id"] = from_int(self.id)
+        result["name"] = from_str(self.name)
+
+        return result
+
+
+@dataclass
+class ListElementSirens:
+    siren: SirenConfig
+
+    @staticmethod
+    def from_dict(obj: Any) -> "ListElementSirens":
+        assert isinstance(obj, dict)
+
+        siren = SirenConfig.from_dict(obj.get("Siren"))
+
+        return ListElementSirens(siren)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+
+        result["Siren"] = to_class(SirenConfig, self.siren)
+
+        return result
+
+
+@dataclass
+class SirensConf:
+    list: List[ListElementSirens]
+
+    @staticmethod
+    def from_dict(obj: Any) -> "SirensConf":
+        assert isinstance(obj, dict)
+
+        list = from_list(ListElementSirens.from_dict, obj.get("List"))
+
+        return SirensConf(list)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+
+        result["List"] = from_list(lambda x: to_class(ListElementSirens, x), self.list)
 
         return result

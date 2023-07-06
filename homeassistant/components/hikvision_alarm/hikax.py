@@ -169,7 +169,7 @@ class HikAx:
             return None
 
     def _base_request(self, url_api: UrlApi, id: int = None, data: dict = None):
-        url = url_api.url.replace("{}", id) if id is not None else url_api.url
+        url = url_api.url.replace("{}", str(id)) if id is not None else url_api.url
         url = self._build_url(f"{self.url_base}{url}", url_api.msg_type)
 
         _LOGGER.info("Data send: %s", data)
